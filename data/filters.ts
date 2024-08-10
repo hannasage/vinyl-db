@@ -1,5 +1,6 @@
 import { groupAndSortByProperty } from '@/utils/groupAndSortByProperty';
 import { FullAlbumDetails } from '@/data/types';
+import { removeArticles } from '@/utils/removeArticles';
 
 export const SORTED_PAGES = [
     {label: "newest", slug: "newest"},
@@ -19,7 +20,6 @@ function sortRecentlyAdded(args: FullAlbumDetails[]) {
 
 function sortArtists(args: FullAlbumDetails[]) {
     const initialSort = groupAndSortByProperty<FullAlbumDetails>(args, "artist_name", "release_year");
-    const removeArticles = (name: string) => name.replace(/^(The|A|An)\s+/i, '').trim();
     return initialSort.sort((ag1,  ag2) => {
         let artistA = removeArticles(ag1[0].artist_name);
         let artistB = removeArticles(ag2[0].artist_name);

@@ -1,0 +1,1 @@
+export const removeArticles = (name: string) => name.replace(/^(The|A|An)\s+/i, '').trim();
