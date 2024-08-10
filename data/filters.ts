@@ -28,10 +28,23 @@ function sortArtists(args: FullAlbumDetails[]) {
 }
 
 function filterPreorders(args: FullAlbumDetails[]) {
-    const relevant = args.filter((arg) =>
+    const { preorders, orders } = {
+        preorders: [] as FullAlbumDetails[],
+        orders: [] as FullAlbumDetails[]
+    }
+    args.filter((arg) =>
       (isPreorder(arg) && !isAcquired(arg)) || (!isPreorder(arg) && !isAcquired(arg)
-    ))
-    return relevant.sort((a, b) => sortByTime(new Date(b.acquired_date), new Date(a.acquired_date)))
+    )).forEach(album => album.preordered ? preorders.push(album) : orders.push(album))
+    return [
+      ...orders
+        .sort((a, b) =>
+          sortByTime(new Date(a.created_at), new Date(b.created_at)
+          )
+        ),
+      ...preorders.sort((a, b) =>
+        sortByTime(new Date(b.acquired_date), new Date(a.acquired_date))
+      )
+    ]
 }
 
 export function sortLegacyEntries(args: FullAlbumDetails[], sort: SortType['slug']) {
