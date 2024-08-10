@@ -36,12 +36,12 @@ function filterPreorders(args: FullAlbumDetails[]) {
       (isPreorder(arg) && !isAcquired(arg)) || (!isPreorder(arg) && !isAcquired(arg)
     )).forEach(album => album.preordered ? preorders.push(album) : orders.push(album))
     return [
-      ...orders
-        .sort((a, b) =>
-          sortByTime(new Date(a.created_at), new Date(b.created_at)
-          )
-        ),
+      ...orders.sort((a, b) =>
+        // new orders at the beginning of the list
+        sortByTime(new Date(a.created_at), new Date(b.created_at))
+      ),
       ...preorders.sort((a, b) =>
+        // sorted by the soonest to arrive
         sortByTime(new Date(b.acquired_date), new Date(a.acquired_date))
       )
     ]
