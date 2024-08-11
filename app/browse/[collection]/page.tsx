@@ -4,14 +4,9 @@ import { createClient } from '@/utils/supabase/server';
 import { SortType, sortLegacyEntries } from '@/data/filters';
 import { getFullList } from '@/utils/supabase/queries';
 import { FullAlbumDetails } from '@/data/types';
-import { redirect } from 'next/navigation'
 
 export default async function Page({ params }: { params: { collection: SortType['slug'] } }) {
   const sb = createClient()
-  // const { data: userData, error: userError } = await sb.auth.getUser();
-  // if (userError || !userData?.user) {
-  //   redirect('/login')
-  // }
   const albumData = await getFullList(sb);
   const sortedAlbums = sortLegacyEntries(albumData, params.collection)
 

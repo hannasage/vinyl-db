@@ -1,4 +1,5 @@
-import { login, signup } from '@/utils/supabase/auth'
+import React from 'react';
+import { login } from '@/utils/supabase/auth'
 
 export default function LoginPage() {
   return (
