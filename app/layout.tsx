@@ -4,7 +4,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navigation from '@/components/Navigation';
 import { stringToColor } from '@/utils/color/stringToColor';
-import { createClient } from '@/utils/supabase/server';
 
 const inter = Inter({ subsets: ["latin"] });
 

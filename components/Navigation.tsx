@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SORTED_PAGES } from '@/data/filters';
 import { ListLink } from '@/components/atom/ListLink';
