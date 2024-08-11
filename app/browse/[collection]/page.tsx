@@ -1,15 +1,19 @@
 import React from 'react';
 import AlbumGrid from '@/components/AlbumGrid';
-import { createSupabaseClient } from '@/utils/supabase/createSupabaseClient';
+import { createClient } from '@/utils/supabase/server';
 import { SortType, sortLegacyEntries } from '@/data/filters';
 import { getFullList } from '@/utils/supabase/queries';
 import { FullAlbumDetails } from '@/data/types';
-import Pill from '@/components/atom/Pill';
+import { redirect } from 'next/navigation'
 
 export default async function Page({ params }: { params: { collection: SortType['slug'] } }) {
-  const sb = createSupabaseClient()
-  const data = await getFullList(sb);
-  const sortedAlbums = sortLegacyEntries(data, params.collection)
+  const sb = createClient()
+  // const { data: userData, error: userError } = await sb.auth.getUser();
+  // if (userError || !userData?.user) {
+  //   redirect('/login')
+  // }
+  const albumData = await getFullList(sb);
+  const sortedAlbums = sortLegacyEntries(albumData, params.collection)
 
   return (
     <main className="flex min-h-screen flex-col items-start my-8 mx-2 lg:mx-6">

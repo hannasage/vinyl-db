@@ -1,27 +1,26 @@
-import { redirect } from 'next/navigation';
-import { createSupabaseClient } from '@/utils/supabase/createSupabaseClient';
+'use server'
 
-export async function signInWithGithub() {
-  "use server"
-  const supabase = createSupabaseClient();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'github',
-    options: {
-      redirectTo: `${process.env.APP_URL}` // no scheme needed (i.e. https://)
-    }
-  })
-  if (data.url) {
-    redirect(data.url);
-  }
-}
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
-export async function signOut() {
-  "use server"
-  const supabase = createSupabaseClient();
-  const { error } = await supabase.auth.signOut()
-  if (!error) {
-    redirect(`https://${process.env.APP_URL}`)
-  } else {
-    console.log(error)
+import { createClient } from '@/utils/supabase/server'
+
+export async function login(formData: FormData) {
+  const supabase = createClient()
+
+  // type-casting here for convenience
+  // in practice, you should validate your inputs
+  const data = {
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
   }
+
+  const { error } = await supabase.auth.signInWithPassword(data)
+
+  if (error) {
+    redirect('/error')
+  }
+
+  revalidatePath('/', 'layout')
+  redirect('/')
 }
