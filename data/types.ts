@@ -1,4 +1,4 @@
-interface SupabaseDbEntry {
+export interface SupabaseDbEntry {
   id: number;
   created_at: string;
 }
