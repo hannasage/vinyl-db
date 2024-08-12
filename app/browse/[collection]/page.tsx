@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import { SortType, sortLegacyEntries } from '@/data/filters';
 import { FullAlbumDetails } from '@/data/types';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 export default async function Page({ params }: { params: { collection: SortType['slug'] } }) {
   const sb = createClient()
@@ -16,6 +17,7 @@ export default async function Page({ params }: { params: { collection: SortType[
       {/*<div className="flex items-start w-full top-0 sticky z-10 bg-gradient-to-b from-black">*/}
       {/*  <Pill text={"D"} className={"px-6 my-6"}/>*/}
       {/*</div>*/}
+      <Link className={"mb-2 text-xl"} href={'/browse'}>Back</Link>
       <AlbumGrid albums={(sortedAlbums as FullAlbumDetails[])} />
     </main>
   );
