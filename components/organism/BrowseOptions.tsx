@@ -2,7 +2,7 @@ import { SORTED_PAGES, SortType } from '@/data/filters';
 import Link from 'next/link';
 import React from 'react';
 
-export default function BrowseTheShelf() {
+export default function BrowseOptions() {
   const colorScheme: Record<SortType['slug'], string> = {
     ['artist-alphabetical']: 'from-purple-500 to-pink-500',
     ['newest']: 'from-cyan-500 to-green-500',
