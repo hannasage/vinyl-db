@@ -18,3 +18,16 @@ export type FullAlbumDetails = Album & { artist_name: string; }
 
 export interface Artist extends SupabaseDbEntry { name: string }
 export interface Vibe extends SupabaseDbEntry { label: string, type: "genre" | "vibe" }
+
+export interface CollectionEntry extends SupabaseDbEntry {
+  albumId: number;
+  layout: string;
+}
+export interface Collection extends SupabaseDbEntry {
+  coverImageUrl: string | null;
+  curator: string; // uuid
+  entries: CollectionEntry;
+  longDescription: string;
+  shortDescription: string;
+  title: string;
+}

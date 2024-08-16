@@ -14,10 +14,11 @@ export default async function Page({ params }: { params: { collection: SortType[
 
   return (
     <main className="flex min-h-screen flex-col items-start my-8 mx-2 lg:mx-6">
-      {/*<div className="flex items-start w-full top-0 sticky z-10 bg-gradient-to-b from-black">*/}
-      {/*  <Pill text={"D"} className={"px-6 my-6"}/>*/}
-      {/*</div>*/}
+      {/* TODO: better back-nav ui */}
       <Link className={"mb-2 text-xl"} href={'/browse'}>Back</Link>
+      {/* TODO: this render will become dynamic based on each entry in the collection's
+            layout property.
+       */}
       <AlbumGrid albums={(sortedAlbums as FullAlbumDetails[])} />
     </main>
   );

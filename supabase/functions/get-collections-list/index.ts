@@ -1,5 +1,6 @@
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 Deno.serve(async (req) => {
   try {
@@ -9,9 +10,9 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
     const { data: collections, error: collectionsError } = await supabase.from('collection').select('*');
-    if (collectionsError) throw artistError;
+    if (collectionsError) throw collectionsError;
     if (!collections?.length)
-      console.error("data missing error\n", "artists: ", artists, "\nalbums: ", albums)
+      console.error("data missing error\n", "collections: ", collections, "error: ", collectionsError)
 
     return new Response(JSON.stringify({ collections }), {
       headers: { 'Content-Type': 'application/json' },
