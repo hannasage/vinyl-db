@@ -10,7 +10,7 @@ export default function BrowseOptions() {
   };
   return (
     <section className={"flex flex-col w-[100%]"}>
-      <h1 className={"text-xl mb-2"}>Browse</h1>
+      <h1 className={"text-xl mb-4"}>Browse</h1>
       <div className={"flex overflow-x-scroll w-[100%] no-scrollbar"}>
         {SORTED_PAGES.map((p, idx) => (
           <Link key={idx} href={`/browse/${p.slug}`}>

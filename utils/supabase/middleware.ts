@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PUBLIC_URI = ['/browse', '/collection', '/error', '/auth', '/login']
+const PRIVATE_URI = ['/admin']
 
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
@@ -37,7 +37,7 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser()
 
-    if (!user && !PUBLIC_URI.some(uri => request.nextUrl.pathname.startsWith(uri))) {
+    if (!user && PRIVATE_URI.some(uri => request.nextUrl.pathname.startsWith(uri))) {
         // no user, potentially respond by redirecting the user to the login page
         const url = request.nextUrl.clone()
         url.pathname = '/login'

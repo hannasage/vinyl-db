@@ -10,7 +10,7 @@ export type SortType = typeof SORTED_PAGES[number]
 
 const isAcquired = (arg: FullAlbumDetails) => arg.acquired_date && new Date(arg.acquired_date).getTime() <= Date.now()
 const isPreorder = (arg: FullAlbumDetails) => arg.preordered
-const sortByTime = (aDate: Date, bDate: Date) => bDate.getTime() - aDate.getTime()
+export const sortByTime = (aDate: Date, bDate: Date) => bDate.getTime() - aDate.getTime()
 
 function sortRecentlyAdded(args: FullAlbumDetails[]) {
     return args

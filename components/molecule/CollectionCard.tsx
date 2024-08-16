@@ -11,11 +11,9 @@ export default function CollectionCard({ coverImageUrl, title, shortDescription 
         <Image
           src={coverImageUrl || ""}
           alt={title}
-          layout="responsive"
           width={1000} // set width as a ratio value
           height={1500} // set height as a ratio value to allow for varying heights
-          objectFit="contain"
-          className="rounded-t-lg"
+          className="rounded-t-lg object-contain"
         />
       </div>
 
