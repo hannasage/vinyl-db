@@ -20,7 +20,7 @@ export default function CollectionCard({ coverImageUrl, title, shortDescription 
       </div>
 
       {/* Gradient Overlay */}
-      <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/80 to-transparent">
+      <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
         {/* Text Content */}
         <div className="p-4">
           <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
