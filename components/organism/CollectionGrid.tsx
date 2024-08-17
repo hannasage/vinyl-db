@@ -22,6 +22,7 @@ export default async function CollectionGrid() {
               coverImageUrl={collection.coverImageUrl}
               title={collection.title}
               id={collection.id}
+              shortDescription={collection.shortDescription}
             />
           </div>
         ))}

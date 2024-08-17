@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Collection } from '@/data/types';
 
 // w-full md:w-[45%] lg:w-[20%]
-export default function CollectionCard({ coverImageUrl, title, id }: Pick<Collection, "coverImageUrl" | "title" | "id" >) {
+export default function CollectionCard({ coverImageUrl, title, id, shortDescription }: Pick<Collection, "coverImageUrl" | "title" | "id" | "shortDescription" >) {
   return (
     <Link href={`/collection/${id}`}>
       <div className="relative rounded-lg overflow-hidden shadow-lg bg-gray-900 w-full">
@@ -25,6 +25,7 @@ export default function CollectionCard({ coverImageUrl, title, id }: Pick<Collec
           {/* Text Content */}
           <div className="p-4">
             <h3 className="sm:text-md md:text-lg lg:text-xl font-semibold tracking-tight">{title}</h3>
+            <p className={"hidden md:block text-sm text-gray-500 -mt-0.5 italic"}>{shortDescription}</p>
           </div>
         </div>
       </div>
