@@ -14,7 +14,7 @@ export default function BrowseOptions() {
       <div className={"flex overflow-x-scroll w-[100%] no-scrollbar"}>
         {SORTED_PAGES.map((p, idx) => (
           <Link key={idx} href={`/browse/${p.slug}`}>
-            <div className={`bg-gradient-to-bl p-4 mr-4 mb-4 w-[225px] rounded-2xl max-md:h-20 ${colorScheme[p.slug]}`}>
+            <div className={`bg-gradient-to-bl p-4 mr-4 mb-4 w-[225px] rounded-md max-md:h-20 ${colorScheme[p.slug]}`}>
               <h2 className={'text-2xl tracking-tight'}>{p.label}</h2>
             </div>
           </Link>
