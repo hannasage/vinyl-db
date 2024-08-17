@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { Album } from '../../../data/types';
 
 Deno.serve(async (req) => {
   try {
@@ -8,19 +9,23 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
+
     // Query definitions
     const reqData: { list: string } = await req.json()
     const listOptions = {
       newest: await supabase
         .from('album')
         .select('*')
-        .gte('acquired_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+        .gte('acquired_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .lte('acquired_date', new Date(Date.now()).toISOString()),
       all: await supabase.from('album').select('*')
     }
+
     // Get items from database
     const { data: artists, error: artistError } = await supabase.from('artist').select('*');
     const { data: albums, error: albumError } = listOptions[reqData.list]
-
+    // Handle potential errors
+    // TODO: better define errors
     if (artistError) throw artistError;
     if (albumError) throw albumError;
     if (!artists?.length || !albums?.length)
@@ -31,12 +36,22 @@ Deno.serve(async (req) => {
       acc[artist.id] = artist.name
       return acc
     }, {})
-    const data = albums?.map((album) => ({
+
+    const sortOptions = {
+      newest: (l: Album[]) => l.sort((albumA, albumB) =>
+        new Date(albumB.acquired_date).getTime() - new Date(albumA.acquired_date).getTime()
+      ),
+      // TODO: Move the rest of sorting to back-end
+      all: (l: Album[]) => l
+    }
+
+    let list = albums?.map((album) => ({
       ...album,
       artist_name: artistMap[album.artist_id]
-    }))
+    }));
+    list = sortOptions[reqData.list](list); // apply dynamic sort
 
-    return new Response(JSON.stringify({ data }), {
+    return new Response(JSON.stringify({ list }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200,
     })

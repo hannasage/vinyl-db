@@ -8,7 +8,9 @@ import Link from 'next/link';
 
 export default async function Page({ params }: { params: { filter: SortType['slug'] } }) {
   const sb = createClient()
-  const { data, error } = await sb.functions.invoke('get-album-list');
+  const { data, error } = await sb.functions.invoke('get-album-list', { body: {
+    list: "all"
+  }});
   if (error) redirect('/error')
   const sortedAlbums = sortLegacyEntries(data.data, params.filter)
 
