@@ -3,7 +3,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Collection } from '@/data/types';
 
-// w-full md:w-[45%] lg:w-[20%]
 export default function CollectionCard({ coverImageUrl, title, id, shortDescription }: Pick<Collection, "coverImageUrl" | "title" | "id" | "shortDescription" >) {
   return (
     <Link href={`/collection/${id}`}>

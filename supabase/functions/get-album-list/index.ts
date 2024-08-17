@@ -8,8 +8,18 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
+    // Query definitions
+    const reqData: { list: string } = await req.json()
+    const listOptions = {
+      newest: await supabase
+        .from('album')
+        .select('*')
+        .gte('acquired_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      all: await supabase.from('album').select('*')
+    }
+    // Get items from database
     const { data: artists, error: artistError } = await supabase.from('artist').select('*');
-    const { data: albums, error: albumError } = await supabase.from('album').select('*');
+    const { data: albums, error: albumError } = listOptions[reqData.list]
 
     if (artistError) throw artistError;
     if (albumError) throw albumError;
