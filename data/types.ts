@@ -21,7 +21,9 @@ export interface Vibe extends SupabaseDbEntry { label: string, type: "genre" | "
 
 export interface CollectionEntry extends SupabaseDbEntry {
   albumId: number;
+  collectionId: number;
   layout: string;
+  layoutProps: object;
 }
 export interface Collection extends SupabaseDbEntry {
   coverImageUrl: string | null;
