@@ -13,7 +13,7 @@ export default async function CollectionGrid() {
   return data?.collections.length ? (
     <>
       <h1 className={"text-xl mb-4"}>Collections</h1>
-      <section className="columns-1 sm:columns-2 lg:columns-4 gap-4">
+      <section className="columns-2 md:columns-3 lg:columns-4 gap-4">
         {data.collections
           .sort((a, b) => sortByTime(new Date(a.created_at), new Date(b.created_at)))
           .map((collection, index) => (
