@@ -24,12 +24,18 @@ Deno.serve(async (req) => {
       .from('entry')
       .select('*')
       .eq('collectionId', reqData.collectionId);
-    if (!collection?.length || collectionError) {
+
+    if (!collection?.length) {
       console.error('Collection data missing error\n', 'collections: ', collection, 'error: ', collectionError);
       return new Response(`No collection found for id ${reqData.collectionId}`, { status: 404 });
-    } else if (!entries?.length || entriesError) {
-      console.error('Entry data missing error\n', 'entries: ', entries, 'error: ', entriesError);
-      return new Response(`No entries found for id ${reqData.collectionId}`, { status: 404 });
+    } else if (!entries?.length) {
+      console.warn('Entry data missing warning\n', 'entries: ', entries, 'error: ', entriesError);
+    } else if (entriesError) {
+      console.error(`Entry error: ${entriesError}`);
+      throw entriesError;
+    } else if (collectionError) {
+      console.error(`Collection error: ${collectionError}`)
+      throw collectionError;
     }
 
     return new Response(JSON.stringify({

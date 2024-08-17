@@ -26,6 +26,7 @@ export interface CollectionEntry extends SupabaseDbEntry {
   layoutProps: object;
 }
 export interface Collection extends SupabaseDbEntry {
+  bannerImageUrl: string | null;
   coverImageUrl: string | null;
   curator: string; // uuid
   entries: CollectionEntry;

@@ -16,20 +16,37 @@ export default async function Page({ params }: { params: { collectionId: number 
   });
   if (
     !collectionData?.meta ||
-    !collectionData.entries.length ||
     collectionError
   ) redirect('/error')
   return (
     <main className="flex min-h-screen flex-col items-start">
-      <div className={"relative w-full h-[30rem] "}>
-        <Image
-          fill
-          src={collectionData.meta.coverImageUrl || ""}
-          alt={`cover for collection: ${collectionData.meta.title}`}
-          className={"object-cover object-[0px 400px]"}
-        />
-      </div>
-      <h1>{collectionData!.meta.title}</h1>
+      {collectionData.meta?.bannerImageUrl ? (
+        <div className={"relative w-full h-[600px] -top-32 -z-10"}>
+          <Image
+            fill
+            src={collectionData.meta.bannerImageUrl}
+            alt={`cover for collection: ${collectionData.meta.title}`}
+            className={"object-cover object-top"}
+          />
+          {/* Gradient Overlay */}
+          <div
+            className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
+            {/* Text Content */}
+            <div className="max-w-screen-lg mx-auto px-4 pb-10">
+              <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight">{collectionData!.meta.title}</h1>
+              <p className={"text-sm text-gray-400 italic"}>{collectionData!.meta.shortDescription}</p>
+              <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]"}>{collectionData!.meta.longDescription}</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col w-full max-w-screen-lg mx-auto px-4 pb-10">
+          <h1
+            className="text-2xl md:text-3xl lg:text-5xl font-semibold tracking-tight">{collectionData!.meta.title}</h1>
+          <p className={"text-sm text-gray-400 italic"}>{collectionData!.meta.shortDescription}</p>
+          <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.meta.longDescription}</p>
+        </div>
+      )}
     </main>
   );
 }
