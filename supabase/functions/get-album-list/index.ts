@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { Album } from '../../../data/types';
 
 Deno.serve(async (req) => {
   try {
@@ -16,7 +15,7 @@ Deno.serve(async (req) => {
       newest: await supabase
         .from('album')
         .select('*')
-        .gte('acquired_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .gte('acquired_date', new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString())
         .lte('acquired_date', new Date(Date.now()).toISOString()),
       all: await supabase.from('album').select('*')
     }

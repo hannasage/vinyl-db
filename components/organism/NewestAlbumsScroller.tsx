@@ -2,7 +2,8 @@ import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { FullAlbumDetails } from '@/data/types';
-import AlbumCover from '@/components/molecule/AlbumCover';
+import AlbumCover, { AlbumCoverContainer } from '@/components/molecule/AlbumCover';
+import Link from 'next/link';
 
 export default async function NewestAlbumsScroller() {
   const sb = createClient()
@@ -12,11 +13,17 @@ export default async function NewestAlbumsScroller() {
   if (!data || error) redirect('/error')
   return (
     <section className={"flex flex-col w-[100%] mb-4"}>
-      <h1 className={"text-xl mb-4 mx-2 lg:mx-6"}>New Additions</h1>
-      <div className={"flex flex-row overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6"}>
+      <h1 className={'text-xl mb-4 mx-2 lg:mx-6 tracking-tight'}>New Additions</h1>
+      <div className={'flex flex-row overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6'}>
         {data.list.map((a, idx) => (
           <AlbumCover key={`${a.title}-cover-${idx}`} album={a} />
         ))}
+        <Link href={"/browse/newest"}>
+          <AlbumCoverContainer
+            className={"flex justify-center align-middle bg-gradient-to-bl from-gray-500 to-gray-700"}>
+            <p className={"my-auto text-xl"}>See All &rarr;</p>
+          </AlbumCoverContainer>
+        </Link>
       </div>
     </section>
   )
