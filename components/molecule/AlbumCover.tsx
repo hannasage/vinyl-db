@@ -8,8 +8,8 @@ const AlbumCover = ({ album }: { album: FullAlbumDetails }) => {
   const infoInteraction = "group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100"
   const infoStyle = "h-full w-full flex flex-col gap-2 bg-black bg-opacity-50 text-white text-center p-4 flex justify-center items-center opacity-0 transition-opacity"
   return (
-    <section className="relative w-52 h-52 group">
-      <Image src={album.artwork_url} alt={album.title} height={999} width={999} className="aspect-square object-cover" />
+    <section className="relative min-w-52 min-h-52 group">
+      <Image src={album.artwork_url} alt={album.title} fill className="aspect-square object-cover" />
       <div className={`${infoPosition} ${infoInteraction} ${infoStyle}`}>
         <Pill text={album.artist_name} />
         <p className="text-sm font-semibold">{album.title}</p>

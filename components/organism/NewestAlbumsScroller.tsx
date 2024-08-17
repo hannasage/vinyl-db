@@ -14,11 +14,9 @@ export default async function NewestAlbumsScroller() {
   return (
     <section className={"flex flex-col w-[100%] mb-4"}>
       <h1 className={"text-xl mb-4 mx-2 lg:mx-6"}>New Additions</h1>
-      <div className={"flex overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6"}>
+      <div className={"flex flex-row overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6"}>
         {data.list.map((a, idx) => (
-          <Link key={idx} href={`/album/${a.id}`}>
-            <AlbumCover album={a} />
-          </Link>
+          <AlbumCover key={`${a.title}-cover-${idx}`} album={a} />
         ))}
       </div>
     </section>
