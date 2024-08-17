@@ -16,11 +16,14 @@ export default async function NewestAlbumsScroller() {
       <h1 className={'text-xl mb-4 mx-2 lg:mx-6 tracking-tight'}>New Additions</h1>
       <div className={'flex flex-row overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6'}>
         {data.list.map((a, idx) => (
-          <AlbumCover key={`${a.title}-cover-${idx}`} album={a} />
+          <div key={`${a.title}-cover-${idx}`} className={"h-52 w-52"}>
+            <AlbumCover album={a} containerSize={52} />
+          </div>
         ))}
+        {/* Custom end-of-list link that matches Album cover style */}
         <Link href={"/browse/newest"}>
           <AlbumCoverContainer
-            className={"flex justify-center align-middle bg-gradient-to-bl from-gray-500 to-gray-700"}>
+            className={"flex justify-center w-52 h-52 align-middle bg-gradient-to-bl from-gray-500 to-gray-700"}>
             <p className={"my-auto text-xl"}>See All &rarr;</p>
           </AlbumCoverContainer>
         </Link>
