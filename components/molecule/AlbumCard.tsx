@@ -21,6 +21,14 @@ export async function AlbumCard({ albumId, background = true, showArtist = true,
   });
   if (!album || albumError) redirect('/error')
 
+  const infoBgClasses = classNames(
+    'bg-gradient-to-r',
+    'from-gray-700',
+    'to-gray-900',
+    'pb-3',
+    'rounded-lg'
+  )
+
   const CalloutWrapper = (props: PropsWithChildren) => {
     return (
         <div className={classNames(
@@ -35,13 +43,7 @@ export async function AlbumCard({ albumId, background = true, showArtist = true,
           'shadow-lg',
           'drop-shadow-glowPurple'
         )}>
-          <div className={classNames(
-            'bg-gradient-to-r',
-            'from-gray-700',
-            'to-gray-900',
-            'pb-3',
-            'rounded-lg'
-          )}>
+          <div className={infoBgClasses}>
             {props.children}
           </div>
         </div>
@@ -50,7 +52,7 @@ export async function AlbumCard({ albumId, background = true, showArtist = true,
 
   const Card = () => {
     return (
-      <div className={`w-[250px] flex flex-col`}>
+      <div className={`w-[250px] flex flex-col ${background && infoBgClasses}`}>
         <Image
           src={album.artwork_url}
           alt={`album art for ${album.title} - ${album.artist_name}`}
