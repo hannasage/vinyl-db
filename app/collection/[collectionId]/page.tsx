@@ -4,6 +4,7 @@ import React from 'react';
 import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
 import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
+import * as AlbumCard from '@/components/molecule/AlbumCard'
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
@@ -13,6 +14,8 @@ function renderLayout(id: string, props: object) {
   switch (id) {
     case AlbumBlurb.id:
       return AlbumBlurb.render(props as AlbumBlurb.Props)
+    case AlbumCard.id:
+      return AlbumCard.render(props as AlbumCard.Props)
     default:
       return <p>Unknown layout {id}</p>
   }
