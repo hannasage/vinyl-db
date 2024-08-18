@@ -3,7 +3,7 @@ import * as AlbumCard from '@/components/molecule/AlbumCard';
 import classNames from 'classnames';
 import { ThemeType } from '@/components/themeTypes';
 
-export type Props = AlbumCard.Props & { blurb: string; theme?: ThemeType }
+export type Props = AlbumCard.Props & { blurb: string; reverse?: boolean, theme?: ThemeType }
 
 export const id = 'album-blurb'
 export function propsCheck(p: Props) {
@@ -15,18 +15,21 @@ const styleColors: Record<ThemeType, { bg: string, text: string }> = {
   sunset: { bg: 'bg-dusk', text: 'text-purple-400' }
 }
 
-export async function AlbumBlurb({ albumId, blurb, theme = 'blueGray' }: Props) {
+export async function AlbumBlurb({ albumId, blurb, reverse, theme = 'blueGray' }: Props) {
   return (
-    <div className={`px-4 py-8 sm:p-8 lg:p-16 mb-8 w-full mx-auto ${styleColors?.[theme].bg}`}>
+    <div className={`px-4 py-8 sm:p-8 lg:p-16 my-8 w-full mx-auto ${styleColors?.[theme].bg}`}>
       <section className={classNames(
         "flex",
         "flex-col",
-        "md:flex-row",
         "w-full",
         "max-w-screen-lg",
         "mx-auto",
         "justify-between",
-        "content-center"
+        "content-center",
+        {
+          ["md:flex-row-reverse"]: reverse,
+          ["md:flex-row"]: !reverse
+        }
       )}>
         <AlbumCard.AlbumCard albumId={albumId} callout={true} background={false} showArtist={false} theme={theme} />
         <p className={classNames(

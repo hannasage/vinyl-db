@@ -61,26 +61,32 @@ export async function AlbumCard({
 
   const CalloutWrapper = (props: PropsWithChildren) => {
     return (
-        <div className={classNames(
-          'self-start',
-          'mx-auto',
-          'my-auto',
-          'p-1.5',
-          'rounded-sm',
-          styleColors?.[theme].borderGradient,
-          'shadow-lg',
-          styleColors?.[theme].glow
-        )}>
-          <div className={styleColors?.[theme].bg}>
-            {props.children}
-          </div>
+      <div className={classNames(
+        'self-start',
+        'mx-auto md:mx-8',
+        'my-auto md:my-4',
+        'p-1.5',
+        'rounded-sm',
+        styleColors?.[theme].borderGradient,
+        'shadow-lg',
+        styleColors?.[theme].glow
+      )}>
+        <div className={styleColors?.[theme].bg}>
+          {props.children}
         </div>
+      </div>
     );
   }
 
   const Card = () => {
     return (
-      <div className={`w-[250px] flex flex-col ${background && styleColors?.[theme].bg}`}>
+      <div className={classNames(
+        'w-[250px]',
+        'flex flex-col',
+        {
+          [styleColors?.[theme].bg]: background,
+        })
+      }>
         <Image
           src={album.artwork_url}
           alt={`album art for ${album.title} - ${album.artist_name}`}
@@ -88,9 +94,9 @@ export async function AlbumCard({
           height={250}
           className={'rounded-t-lg'}
         />
-        <em className={'mt-3 ml-2 text-gray-200'}>{album.title}</em>
-        {showArtist && <p className={'ml-2 text-gray-200'}>{album.artist_name}</p>}
-        <em className={'ml-2 text-gray-400'}>{album.release_year}</em>
+        <em className={'mt-3 mx-2 whitespace-nowrap truncate text-gray-200'}>{album.title}</em>
+        {showArtist && <p className={'mx-2 text-gray-200'}>{album.artist_name}</p>}
+        <em className={'mx-2 text-gray-400'}>{album.release_year}</em>
       </div>
     )
   }
@@ -100,7 +106,9 @@ export async function AlbumCard({
       <Card />
     </CalloutWrapper>
   ) : (
-    <Card />
+    <div className={classNames("m-4")}>
+      <Card />
+    </div>
   );
 }
 
