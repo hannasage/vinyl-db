@@ -33,9 +33,9 @@ const styleColors: Record<ThemeType, { bg: string, borderGradient: string, glow:
   },
   sunset: {
     bg: classNames(
-      'bg-gradient-to-r',
-      'from-amber-700',
-      'to-orange-900',
+      'bg-gradient-to-br',
+      'from-pink-600',
+      'to-purple-900',
       'pb-3',
       'rounded-lg'
     ),
