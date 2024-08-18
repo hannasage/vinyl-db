@@ -1,7 +1,7 @@
 import React from 'react';
-import { AlbumCard } from '@/components/molecule/AlbumCard';
+import * as AlbumCard from '@/components/molecule/AlbumCard';
 
-export type Props = { albumId: number; blurb: string; }
+export type Props = AlbumCard.Props & { blurb: string; }
 
 export const id = 'album-blurb'
 export function propsCheck(p: Props) {
@@ -15,7 +15,7 @@ export async function AlbumBlurb({ albumId, blurb }: Props) {
       <div className={"w-full max-w-screen-lg mx-auto p-0.5 rounded-md bg-gradient-to-br from-purple-300 to-blue-500 shadow-lg"}>
         <div className={"max-w-screen-lg mx-auto bg-black p-8 rounded-md"}>
           <section className={"flex flex-col md:flex-row w-full max-w-screen-lg mx-auto justify-center content-center"}>
-            <AlbumCard albumId={albumId} showArtist={false} background={false} />
+            <AlbumCard.AlbumCard albumId={albumId} showArtist={false} background={false} />
             <p className={'my-auto text-justify max-w-[500px] leading-6 tracking-tight p-8'}>{blurb}</p>
           </section>
         </div>
