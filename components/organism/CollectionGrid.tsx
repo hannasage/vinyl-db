@@ -8,7 +8,7 @@ import { sortByTime } from '@/data/filters';
 export default async function CollectionGrid() {
   const sb = createClient();
   const { data, error } =
-    await sb.functions.invoke<{ collections: Collection[] }>('get-collections-list');
+    await sb.functions.invoke<{ collections: Collection[] }>('get-collection-list');
   if (error) redirect('/error');
   return data?.collections.length ? (
     <>

@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
-    const { data: collections, error: collectionsError } = await supabase.from('collection').select('*');
+    const { data: collections, error: collectionsError } = await supabase.from('collection').select('*').eq('isPublic', true);
     if (collectionsError) throw collectionsError;
     if (!collections?.length)
       console.error("data missing error\n", "collections: ", collections, "error: ", collectionsError)
