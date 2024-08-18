@@ -5,6 +5,8 @@ import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
 import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
 import * as AlbumCard from '@/components/molecule/AlbumCard'
+import classNames from 'classnames';
+import Link from 'next/link';
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
@@ -25,12 +27,32 @@ function renderLayout(layoutId: string, props: object, albumId: number) {
   }
 }
 
+function BackButton() {
+  return (
+    <div className={classNames(
+      'py-10',
+    )}>
+      <Link className={classNames(
+        'bg-gradient-to-br from-red-500 to-purple-500',
+        'drop-shadow-glowPurple',
+        'px-6 py-3',
+        'text-white',
+        'font-semibold',
+        'rounded-full',
+      )} href={'/'}>Back</Link>
+    </div>
+  )
+}
+
 export default async function Page({ params }: { params: { collectionId: number } }) {
-  const sb = createClient()
-  const { data: collectionData, error: collectionError } = await sb.functions.invoke<GetCollectionRes>('get-collection', {
-    body: { collectionId: params.collectionId }
+  const sb = createClient();
+  const {
+    data: collectionData,
+    error: collectionError,
+  } = await sb.functions.invoke<GetCollectionRes>('get-collection', {
+    body: { collectionId: params.collectionId },
   });
-  if (!collectionData || collectionError) redirect('/error')
+  if (!collectionData || collectionError) redirect('/error');
   return (
     <main className="flex min-h-screen flex-col items-start">
       {collectionData?.bannerImageUrl ? (
@@ -46,6 +68,7 @@ export default async function Page({ params }: { params: { collectionId: number 
             className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
             {/* Text Content */}
             <div className="w-full max-w-screen-lg mx-auto px-4 pb-10">
+              <BackButton />
               <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
               <p className={"text-sm text-gray-400 italic"}>{collectionData!.shortDescription}</p>
               <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]"}>{collectionData!.longDescription}</p>
@@ -54,6 +77,7 @@ export default async function Page({ params }: { params: { collectionId: number 
         </div>
       ) : (
         <div className="flex flex-col w-full max-w-screen-lg mx-auto px-4 pb-10">
+          <BackButton />
           <h1
             className="text-2xl md:text-3xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
           <p className={"text-sm text-gray-400 italic"}>{collectionData!.shortDescription}</p>
