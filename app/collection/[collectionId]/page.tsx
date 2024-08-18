@@ -56,7 +56,7 @@ export default async function Page({ params }: { params: { collectionId: number 
   return (
     <main className="flex min-h-screen flex-col items-start">
       {collectionData?.bannerImageUrl ? (
-        <div className={"relative w-full h-[600px] -top-32 -z-10"}>
+        <div className={"relative w-full h-[600px] -top-32"}>
           <Image
             fill
             src={collectionData.bannerImageUrl}
@@ -68,10 +68,22 @@ export default async function Page({ params }: { params: { collectionId: number 
             className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
             {/* Text Content */}
             <div className="w-full max-w-screen-lg mx-auto px-4 pb-10">
-              <BackButton />
+              <div className={classNames(
+                'py-10',
+              )}>
+                <Link className={classNames(
+                  'bg-gradient-to-br from-red-500 to-purple-500',
+                  'drop-shadow-glowPurple',
+                  'px-6 py-3',
+                  'hover:cursor-pointer',
+                  'text-white',
+                  'font-semibold',
+                  'rounded-full',
+                )} href={'/'}>Back</Link>
+              </div>
               <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
-              <p className={"text-sm text-gray-400 italic"}>{collectionData!.shortDescription}</p>
-              <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]"}>{collectionData!.longDescription}</p>
+              <p className={'text-sm text-gray-400 italic'}>{collectionData!.shortDescription}</p>
+              <p className={'text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]'}>{collectionData!.longDescription}</p>
             </div>
           </div>
         </div>
