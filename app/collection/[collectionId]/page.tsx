@@ -53,10 +53,16 @@ export default async function Page({ params }: { params: { collectionId: number 
           <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.longDescription}</p>
         </div>
       )}
-      {collectionData.entries &&
-        collectionData.entries
-          .map((e) => renderLayout(e.layout, e.layoutProps))
-      }
+      <div className={"relative -top-32 w-full"}>
+        {collectionData.entries &&
+          collectionData.entries
+            .sort((eA, eB) => eA.position - eB.position)
+            .map((e, idx) => {
+              const Component = () => renderLayout(e.layout, e.layoutProps);
+              return <Component key={`layout-${e.id}-${idx}`} />
+            })
+        }
+      </div>
     </main>
   );
 }

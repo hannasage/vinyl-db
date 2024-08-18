@@ -24,6 +24,7 @@ export interface CollectionEntry extends SupabaseDbEntry {
   collectionId: number;
   layout: string;
   layoutProps: object;
+  position: number;
 }
 export interface Collection extends SupabaseDbEntry {
   bannerImageUrl: string | null;
