@@ -12,7 +12,7 @@ export function propsCheck(p: Props) {
 
 const styleColors: Record<ThemeType, { bg: string, text: string }> = {
   blueGray: { bg: 'bg-gray-900', text: 'text-blue-400'},
-  sunset: { bg: 'bg-gray-900', text: 'text-purple-400' }
+  sunset: { bg: 'bg-dusk', text: 'text-purple-400' }
 }
 
 export async function AlbumBlurb({ albumId, blurb, theme = 'blueGray' }: Props) {
