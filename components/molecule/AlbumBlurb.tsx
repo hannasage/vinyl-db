@@ -26,14 +26,14 @@ export async function AlbumBlurb({ albumId, blurb }: Props) {
         <AlbumCard.AlbumCard albumId={albumId} showArtist={false} background={false} callout={true} />
         <p className={classNames(
           'm-auto',
-          // 'text-justify sm:text-right lg:text-justify',
+          'text-justify',
           'text-3xl',
-          'font-thin',
+          'font-light md:font-thin',
           'opacity-70',
           'text-blue-400',
           'max-w-[700px]',
-          'leading-10',
-          // 'tracking-tight',
+          'leading-9 lg:leading-10',
+          'tracking-tight',
           'p-8'
         )}>{blurb}</p>
       </section>
