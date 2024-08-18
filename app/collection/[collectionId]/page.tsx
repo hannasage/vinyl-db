@@ -10,14 +10,18 @@ interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
 }
 
-function renderLayout(id: string, props: object) {
-  switch (id) {
+function renderLayout(layoutId: string, props: object, albumId: number) {
+  const fullProps = {
+    ...props,
+    albumId
+  }
+  switch (layoutId) {
     case AlbumBlurb.id:
-      return AlbumBlurb.render(props as AlbumBlurb.Props)
+      return AlbumBlurb.render(fullProps as AlbumBlurb.Props)
     case AlbumCard.id:
-      return AlbumCard.render(props as AlbumCard.Props)
+      return AlbumCard.render(fullProps as AlbumCard.Props)
     default:
-      return <p>Unknown layout {id}</p>
+      return <p>Unknown layout {layoutId}</p>
   }
 }
 
@@ -61,7 +65,7 @@ export default async function Page({ params }: { params: { collectionId: number 
           collectionData.entries
             .sort((eA, eB) => eA.position - eB.position)
             .map((e, idx) => {
-              const Component = () => renderLayout(e.layout, e.layoutProps);
+              const Component = () => renderLayout(e.layout, e.layoutProps, e.albumId);
               return <Component key={`layout-${e.id}-${idx}`} />
             })
         }
