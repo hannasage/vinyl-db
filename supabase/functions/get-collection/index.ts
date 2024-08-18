@@ -39,9 +39,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      meta: {
-        ...collection[0]
-      },
+      ...collection[0],
       entries: entries
     }), {
       headers: { 'Content-Type': 'application/json' },

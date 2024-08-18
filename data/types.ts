@@ -29,7 +29,6 @@ export interface Collection extends SupabaseDbEntry {
   bannerImageUrl: string | null;
   coverImageUrl: string | null;
   curator: string; // uuid
-  entries: CollectionEntry;
   longDescription: string;
   shortDescription: string;
   title: string;
