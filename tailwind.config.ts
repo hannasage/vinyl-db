@@ -14,9 +14,9 @@ const config: Config = {
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
       },
       dropShadow: {
-        glow: [
-          "0 0px 20px rgba(255,255, 255, 0.35)",
-          "0 0px 65px rgba(255, 255,255, 0.2)"
+        glowPurple: [
+          "0 0px 20px rgba(165, 145, 230, 0.35)",
+          "0 0px 65px rgba(165, 145, 230, 0.2)"
         ]
       }
     },
