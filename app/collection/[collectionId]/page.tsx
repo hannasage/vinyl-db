@@ -5,6 +5,8 @@ import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
 import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
 import * as AlbumCard from '@/components/molecule/AlbumCard'
+import Link from 'next/link';
+import classNames from 'classnames';
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
@@ -45,7 +47,7 @@ export default async function Page({ params }: { params: { collectionId: number 
           <div
             className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
             {/* Text Content */}
-            <div className="max-w-screen-lg mx-auto px-4 pb-10">
+            <div className="w-full max-w-screen-lg mx-auto px-4 pb-10">
               <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
               <p className={"text-sm text-gray-400 italic"}>{collectionData!.shortDescription}</p>
               <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]"}>{collectionData!.longDescription}</p>
@@ -63,7 +65,10 @@ export default async function Page({ params }: { params: { collectionId: number 
       <div className={"relative flex flex-wrap justify-center items-center -top-40 w-full"}>
         {collectionData.entries &&
           collectionData.entries
-            .sort((eA, eB) => eA.position - eB.position)
+            .sort((eA, eB) => {
+              if (eA.position === null) return -999
+              return  eA.position - eB.position;
+            })
             .map((e, idx) => {
               const Component = () => renderLayout(e.layout, e.layoutProps, e.albumId);
               return <Component key={`layout-${e.id}-${idx}`} />

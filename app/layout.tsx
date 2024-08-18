@@ -21,12 +21,8 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <h1 className={"mt-6 ml-2 lg:ml-6 font-black text-7xl spacing tracking-tighter"}>
-          {title.split('').map((char, index) => (
-            <span key={index} style={{ color: stringToColor(char) }}>
-              {char}
-            </span>
-          ))}
+        <h1 className={"mt-6 ml-4 lg:ml-6 font-black text-3xl spacing tracking-tighter"}>
+          {title}
         </h1>
         <nav>
           <Navigation />
