@@ -5,8 +5,6 @@ import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
 import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
 import * as AlbumCard from '@/components/molecule/AlbumCard'
-import Link from 'next/link';
-import classNames from 'classnames';
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]

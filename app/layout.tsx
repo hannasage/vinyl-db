@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navigation from '@/components/molecule/Navigation';
-import { stringToColor } from '@/utils/color/stringToColor';
 
 const inter = Inter({ subsets: ["latin"] });
 
