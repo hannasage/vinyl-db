@@ -3,9 +3,19 @@ import { redirect } from 'next/navigation';
 import React from 'react';
 import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
+import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
+}
+
+function renderLayout(id: string, props: object) {
+  switch (id) {
+    case AlbumBlurb.id:
+      return AlbumBlurb.render(props as AlbumBlurb.Props)
+    default:
+      return <p>Unknown layout {id}</p>
+  }
 }
 
 export default async function Page({ params }: { params: { collectionId: number } }) {
@@ -43,6 +53,10 @@ export default async function Page({ params }: { params: { collectionId: number 
           <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.longDescription}</p>
         </div>
       )}
+      {collectionData.entries &&
+        collectionData.entries
+          .map((e) => renderLayout(e.layout, e.layoutProps))
+      }
     </main>
   );
 }
