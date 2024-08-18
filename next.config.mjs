@@ -10,15 +10,6 @@ const nextConfig = {
       },
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/browse/newest',
-        permanent: true,
-      },
-    ]
-  },
 };
 
 export default nextConfig;

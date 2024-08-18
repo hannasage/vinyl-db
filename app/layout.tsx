@@ -1,27 +1,18 @@
-import type { GetServerSideProps, Metadata } from 'next';
+import React from 'react';
+import type { Metadata } from 'next';
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Link from 'next/link';
-import { SORTED_PAGES } from '@/data/filters';
-import Navigation from '@/components/Navigation';
+import Navigation from '@/components/molecule/Navigation';
 import { stringToColor } from '@/utils/color/stringToColor';
 
 const inter = Inter({ subsets: ["latin"] });
-
-const getServerSideProps: GetServerSideProps = async (context) => {
-  return {
-    props: {
-      currentPath: context.resolvedUrl
-    }
-  };
-};
 
 export const metadata: Metadata = {
   title: "some chick's vinyl collection",
   description: "pov: you came over and i've talked your ear off about vinyl, so now you're handed this phone or linked to this page to find one to listen to.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

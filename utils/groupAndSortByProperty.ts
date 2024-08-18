@@ -11,7 +11,7 @@ export function groupAndSortByProperty<T>(arr: T[], groupBy: keyof T, sortGroups
     return acc;
   }, {});
   // Step 2: Sort each group alphabetically by the property
-  if (!!sortGroupsBy) {
+  if (sortGroupsBy) {
     for (let key in grouped) {
       grouped[key].sort((a, b) => String(a[sortGroupsBy]).localeCompare(String(b[sortGroupsBy])));
     }
