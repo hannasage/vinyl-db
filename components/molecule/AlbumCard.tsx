@@ -4,30 +4,60 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { FullAlbumDetails } from '@/data/types';
 import classNames from 'classnames';
+import { ThemeType } from '@/components/themeTypes';
 
-export type Props = { albumId: number, callout?: boolean, background?: boolean, showArtist?: boolean }
+export type Props = {
+  albumId: number,
+  background?: boolean,
+  callout?: boolean,
+  showArtist?: boolean,
+  theme?: ThemeType
+}
 
 export const id = 'album-card'
 export function propsCheck(p: Props) {
   return p && p.albumId
 }
 
+const styleColors: Record<ThemeType, { bg: string, borderGradient: string, glow: string }> = {
+  blueGray: {
+    bg: classNames(
+      'bg-gradient-to-r',
+      'from-gray-700',
+      'to-gray-900',
+      'pb-3',
+      'rounded-lg'
+    ),
+    borderGradient: classNames('bg-gradient-to-br', 'from-purple-300', 'to-blue-500'),
+    glow: 'drop-shadow-glowPurple'
+  },
+  sunset: {
+    bg: classNames(
+      'bg-gradient-to-r',
+      'from-amber-700',
+      'to-orange-900',
+      'pb-3',
+      'rounded-lg'
+    ),
+    borderGradient: classNames('bg-gradient-to-br', 'from-red-500', 'to-purple-600'),
+    glow: 'drop-shadow-glowSunset'
+  }
+}
+
 type GetAlbumRes = FullAlbumDetails
 
-export async function AlbumCard({ albumId, background = true, showArtist = true, callout = false }: Props) {
+export async function AlbumCard({
+  albumId,
+  background = true,
+  showArtist = true,
+  callout = false,
+  theme = 'blueGray'
+}: Props) {
   const sb = createClient()
   const { data: album, error: albumError } = await sb.functions.invoke<GetAlbumRes>('get-album', {
     body: { albumId: albumId }
   });
   if (!album || albumError) redirect('/error')
-
-  const infoBgClasses = classNames(
-    'bg-gradient-to-r',
-    'from-gray-700',
-    'to-gray-900',
-    'pb-3',
-    'rounded-lg'
-  )
 
   const CalloutWrapper = (props: PropsWithChildren) => {
     return (
@@ -37,13 +67,11 @@ export async function AlbumCard({ albumId, background = true, showArtist = true,
           'my-auto',
           'p-1.5',
           'rounded-sm',
-          'bg-gradient-to-br',
-          'from-purple-300',
-          'to-blue-500',
+          styleColors?.[theme].borderGradient,
           'shadow-lg',
-          'drop-shadow-glowPurple'
+          styleColors?.[theme].glow
         )}>
-          <div className={infoBgClasses}>
+          <div className={styleColors?.[theme].bg}>
             {props.children}
           </div>
         </div>
@@ -52,7 +80,7 @@ export async function AlbumCard({ albumId, background = true, showArtist = true,
 
   const Card = () => {
     return (
-      <div className={`w-[250px] flex flex-col ${background && infoBgClasses}`}>
+      <div className={`w-[250px] flex flex-col ${background && styleColors?.[theme].bg}`}>
         <Image
           src={album.artwork_url}
           alt={`album art for ${album.title} - ${album.artist_name}`}

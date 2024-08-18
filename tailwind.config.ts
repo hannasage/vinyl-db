@@ -8,6 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      colors: {
+        myPurple: "rgb(165, 145, 230)",
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
@@ -17,6 +20,10 @@ const config: Config = {
         glowPurple: [
           "0 0px 20px rgba(165, 145, 230, 0.35)",
           "0 0px 65px rgba(165, 145, 230, 0.2)"
+        ],
+        glowSunset: [
+          "0 0px 20px rgba(255, 94, 116, 0.35)",
+          "0 0px 65px rgba(255, 94, 116, 0.2)"
         ]
       }
     },

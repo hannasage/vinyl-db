@@ -1,18 +1,23 @@
 import React from 'react';
 import * as AlbumCard from '@/components/molecule/AlbumCard';
 import classNames from 'classnames';
+import { ThemeType } from '@/components/themeTypes';
 
-export type Props = AlbumCard.Props & { blurb: string; }
+export type Props = AlbumCard.Props & { blurb: string; theme?: ThemeType }
 
 export const id = 'album-blurb'
 export function propsCheck(p: Props) {
   return !!p.blurb && !!p.albumId
 }
 
+const styleColors: Record<ThemeType, { bg: string, text: string }> = {
+  blueGray: { bg: 'bg-gray-900', text: 'text-blue-400'},
+  sunset: { bg: 'bg-gray-900', text: 'text-purple-400' }
+}
 
-export async function AlbumBlurb({ albumId, blurb }: Props) {
+export async function AlbumBlurb({ albumId, blurb, theme = 'blueGray' }: Props) {
   return (
-    <div className={"px-4 py-8 sm:p-8 lg:p-16 mb-8 w-full mx-auto bg-gray-900"}>
+    <div className={`px-4 py-8 sm:p-8 lg:p-16 mb-8 w-full mx-auto ${styleColors?.[theme].bg}`}>
       <section className={classNames(
         "flex",
         "flex-col",
@@ -23,14 +28,14 @@ export async function AlbumBlurb({ albumId, blurb }: Props) {
         "justify-between",
         "content-center"
       )}>
-        <AlbumCard.AlbumCard albumId={albumId} showArtist={false} background={false} callout={true} />
+        <AlbumCard.AlbumCard albumId={albumId} callout={true} background={false} showArtist={false} theme={theme} />
         <p className={classNames(
           'm-auto',
           'text-justify',
           'text-3xl',
           'font-light md:font-thin',
           'opacity-70',
-          'text-blue-400',
+          styleColors?.[theme].text,
           'max-w-[700px]',
           'leading-9 lg:leading-10',
           'tracking-tight',
