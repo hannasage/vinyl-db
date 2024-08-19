@@ -12,8 +12,8 @@ export default async function CollectionGrid() {
   if (error) redirect('/error');
   return data?.collections.length ? (
     <>
-      <h1 className={"text-xl mb-4 mx-2 lg:mx-6 tracking-tight"}>Collections</h1>
-      <section className="mx-2 lg:mx-6 columns-2 md:columns-3 lg:columns-4 gap-4">
+      <h1 className={"text-xl mb-4 mx-2 lg:mx-10 tracking-tight"}>Collections</h1>
+      <section className="mx-2 lg:mx-10 columns-2 md:columns-3 lg:columns-4 gap-4">
         {data.collections
           .sort((a, b) => sortByTime(new Date(a.created_at), new Date(b.created_at)))
           .map((collection, index) => (

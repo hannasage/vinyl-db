@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navigation from '@/components/molecule/Navigation';
-import { stringToColor } from '@/utils/color/stringToColor';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,17 +20,15 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <h1 className={"mt-6 ml-2 lg:ml-6 font-black text-7xl spacing tracking-tighter"}>
-          {title.split('').map((char, index) => (
-            <span key={index} style={{ color: stringToColor(char) }}>
-              {char}
-            </span>
-          ))}
+        <h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-3xl spacing tracking-tighter"}>
+          {title}
         </h1>
         <nav>
           <Navigation />
         </nav>
-        {children}
+        <main className={"absolute top-20"}>
+          {children}
+        </main>
       </body>
     </html>
   );
