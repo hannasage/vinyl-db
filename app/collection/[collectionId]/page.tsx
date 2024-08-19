@@ -7,6 +7,34 @@ import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
 import * as AlbumCard from '@/components/molecule/AlbumCard'
 import classNames from 'classnames';
 import Link from 'next/link';
+import type { Metadata } from 'next'
+
+interface Props { params: { collectionId: number } }
+
+async function fetchCollection(collectionId: number) {
+  const sb = createClient();
+  const {
+    data: collectionData,
+    error: collectionError,
+  } = await sb.functions.invoke<GetCollectionRes>('get-collection', {
+    body: { collectionId },
+  });
+  if (!collectionData || collectionError) redirect('/error');
+  return { collectionData, collectionError }
+}
+
+export async function generateMetadata(
+  { params }: Props
+): Promise<Metadata> {
+  const { collectionData } = await fetchCollection(params.collectionId)
+  return {
+    title: `${collectionData.title} — some chick's vinyl collection`,
+    description: collectionData.longDescription,
+    openGraph: {
+      images: [collectionData.bannerImageUrl || collectionData.coverImageUrl || ""],
+    },
+  }
+}
 
 interface GetCollectionRes extends Collection {
   entries: CollectionEntry[]
@@ -44,15 +72,8 @@ function BackButton() {
   )
 }
 
-export default async function Page({ params }: { params: { collectionId: number } }) {
-  const sb = createClient();
-  const {
-    data: collectionData,
-    error: collectionError,
-  } = await sb.functions.invoke<GetCollectionRes>('get-collection', {
-    body: { collectionId: params.collectionId },
-  });
-  if (!collectionData || collectionError) redirect('/error');
+export default async function Page({ params }: Props) {
+  const { collectionData } = await fetchCollection(params.collectionId)
   return (
     <main className="flex min-h-screen flex-col items-start">
       {collectionData?.bannerImageUrl ? (
