@@ -13,8 +13,8 @@ export default async function NewestAlbumsScroller() {
   if (!data || error) redirect('/error')
   return (
     <section className={"flex flex-col w-[100%] mb-4"}>
-      <h1 className={'text-xl mb-4 mx-2 lg:mx-6 tracking-tight'}>New Additions</h1>
-      <div className={'flex flex-col flex-wrap max-h-[500px] overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-6'}>
+      <h1 className={'text-xl mb-4 mx-2 lg:mx-10 tracking-tight'}>New Additions</h1>
+      <div className={'flex flex-col flex-wrap max-h-[500px] overflow-x-scroll w-[100%] no-scrollbar px-2 lg:px-10'}>
         {data.list.map((a, idx) => (
           <div key={`${a.title}-cover-${idx}`} className={"h-52 w-52"}>
             <AlbumCover album={a} containerSize={52} />

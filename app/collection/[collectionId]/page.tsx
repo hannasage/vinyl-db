@@ -56,7 +56,7 @@ export default async function Page({ params }: { params: { collectionId: number 
   return (
     <main className="flex min-h-screen flex-col items-start">
       {collectionData?.bannerImageUrl ? (
-        <div className={"relative w-full h-[600px] -top-6"}>
+        <div className={"relative w-full h-[600px] -top-28"}>
           <Image
             fill
             src={collectionData.bannerImageUrl}
@@ -96,7 +96,7 @@ export default async function Page({ params }: { params: { collectionId: number 
           <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.longDescription}</p>
         </div>
       )}
-      <div className={"relative flex flex-wrap justify-center items-center w-full -top-6"}>
+      <div className={"relative flex flex-wrap justify-center items-center w-full -top-36"}>
         {collectionData.entries &&
           collectionData.entries
             .sort((eA, eB) => {

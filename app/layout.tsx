@@ -26,7 +26,9 @@ export default async function RootLayout({
         <nav>
           <Navigation />
         </nav>
-        {children}
+        <main className={"absolute top-20"}>
+          {children}
+        </main>
       </body>
     </html>
   );
