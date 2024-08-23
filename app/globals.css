@@ -16,14 +16,66 @@
   }
 }
 
-body {
-  color: white;
-  background: black;
-}
-
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-manilla;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  em,
+  strong {
+    @apply text-manillaDark;
+  }
+
+  h1 {
+    @apply text-6xl;
+  }
+
+  h2 {
+    @apply text-5xl
+  }
+
+  h3 {
+    @apply text-4xl
+  }
+
+  h4 {
+    @apply text-3xl
+  }
+
+  h5 {
+    @apply text-2xl
+  }
+
+  a {
+    @apply text-manillaLink underline;
+    :hover {
+      @apply cursor-pointer
+    }
+  }
+
+  .page-left-padding {
+    @apply sm:pl-4 pl-10;
+  }
+
+  .page-right-padding {
+    @apply sm:pr-4 pr-10;
+  }
+
+  .default-page-padding {
+    @apply page-left-padding page-right-padding;
   }
 }
 

@@ -20,7 +20,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-3xl spacing tracking-tighter"}>
+        <h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black spacing tracking-tighter"}>
           {title}
         </h1>
         <nav>

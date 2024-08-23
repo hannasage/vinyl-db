@@ -16,7 +16,7 @@ const AlbumCover = ({ album, containerSize = 'full' }: { album: FullAlbumDetails
       <Image src={album.artwork_url} alt={album.title} width={999} height={999} className="aspect-square object-cover" />
       <div className={`${infoPosition} ${infoInteraction} ${infoStyle}`}>
         <Pill text={album.artist_name} />
-        <p className="text-sm font-semibold">{album.title}</p>
+        <p className="text-sm text-white font-semibold">{album.title}</p>
       </div>
     </AlbumCoverContainer>
   )

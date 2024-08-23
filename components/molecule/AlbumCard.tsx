@@ -19,19 +19,38 @@ export function propsCheck(p: Props) {
   return p && p.albumId
 }
 
-const styleColors: Record<ThemeType, { bg: string, borderGradient: string, glow: string }> = {
-  blueGray: {
+const styleColors: Record<ThemeType, {
+  bg: string,
+  text: string,
+  borderGradient: string,
+  glow: string
+}> = {
+  blackWhite: {
+    text: 'text-gray-800',
     bg: classNames(
       'bg-gradient-to-r',
-      'from-gray-700',
-      'to-gray-900',
+      'from-gray-200',
+      'to-gray-300',
       'pb-3',
       'rounded-lg'
     ),
-    borderGradient: classNames('bg-gradient-to-br', 'from-purple-300', 'to-blue-500'),
+    borderGradient: classNames('bg-gradient-to-br', 'from-gray-300', 'to-gray-300'),
+    glow: 'drop-shadow-glowPurple'
+  },
+  blueGray: {
+    text: 'text-gray-800',
+    bg: classNames(
+      'bg-gradient-to-r',
+      'from-blue-200',
+      'to-gray-300',
+      'pb-3',
+      'rounded-lg'
+    ),
+    borderGradient: classNames('bg-gradient-to-br', 'from-blue-300', 'to-gray-300'),
     glow: 'drop-shadow-glowPurple'
   },
   sunset: {
+    text: 'text-white',
     bg: classNames(
       'bg-gradient-to-br',
       'from-pink-600',
@@ -41,6 +60,19 @@ const styleColors: Record<ThemeType, { bg: string, borderGradient: string, glow:
     ),
     borderGradient: classNames('bg-gradient-to-br', 'from-red-500', 'to-purple-600'),
     glow: 'drop-shadow-glowSunset'
+  },
+  greenOut: {
+    text: 'text-gray-200',
+    bg: classNames(
+      'bg-gradient-to-r',
+      'from-green-600',
+      'to-green-700',
+      'text-gray-200',
+      'pb-3',
+      'rounded-lg'
+    ),
+    borderGradient: classNames('bg-gradient-to-br', 'from-green-400', 'to-green-600'),
+    glow: ''
   }
 }
 
@@ -51,7 +83,7 @@ export async function AlbumCard({
   background = true,
   showArtist = true,
   callout = false,
-  theme = 'blueGray'
+  theme = 'blackWhite'
 }: Props) {
   const sb = createClient()
   const { data: album, error: albumError } = await sb.functions.invoke<GetAlbumRes>('get-album', {
@@ -81,7 +113,7 @@ export async function AlbumCard({
   const Card = () => {
     return (
       <div className={classNames(
-        'w-[250px]',
+        'w-[300px]',
         'flex flex-col',
         {
           [styleColors?.[theme].bg]: background,
@@ -90,13 +122,39 @@ export async function AlbumCard({
         <Image
           src={album.artwork_url}
           alt={`album art for ${album.title} - ${album.artist_name}`}
-          width={250}
-          height={250}
+          width={300}
+          height={300}
           className={'rounded-t-lg'}
         />
-        <em className={'mt-3 mx-2 whitespace-nowrap truncate text-gray-200'}>{album.title}</em>
-        {showArtist && <p className={'mx-2 text-gray-200'}>{album.artist_name}</p>}
-        <em className={'mx-2 text-gray-400'}>{album.release_year}</em>
+
+        {/* Album Info */}
+        <em className={classNames(
+          'mt-3',
+          'mx-2',
+          'whitespace-nowrap',
+          'truncate',
+          styleColors?.[theme].text
+        )}>
+          {album.title}
+        </em>
+
+        {showArtist &&
+          <strong className={classNames(
+          'mx-2',
+            styleColors?.[theme].text
+          )}>
+            {album.artist_name}
+          </strong>
+        }
+
+        <p className={classNames(
+          'mx-2',
+          'opacity-50',
+          'text-sm',
+          styleColors?.[theme].text
+        )}>
+          {album.release_year}
+        </p>
       </div>
     )
   }

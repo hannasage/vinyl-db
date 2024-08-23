@@ -102,7 +102,7 @@ export default async function Page({ params }: Props) {
                   'rounded-full',
                 )} href={'/'}>Back</Link>
               </div>
-              <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
+              <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-manilla">{collectionData!.title}</h1>
               <p className={'text-sm text-gray-400 italic'}>{collectionData!.shortDescription}</p>
               <p className={'text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]'}>{collectionData!.longDescription}</p>
             </div>
@@ -117,7 +117,7 @@ export default async function Page({ params }: Props) {
           <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.longDescription}</p>
         </div>
       )}
-      <div className={"relative flex flex-wrap justify-center items-center w-full -top-36"}>
+      <div className={"relative flex flex-wrap justify-center items-center w-full -top-28"}>
         {collectionData.entries &&
           collectionData.entries
             .sort((eA, eB) => {
