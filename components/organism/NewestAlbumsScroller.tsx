@@ -23,7 +23,7 @@ export default async function NewestAlbumsScroller() {
   return (
     <section className="page-hero-container bg-dusk">
       <h2 className={"absolute section-heading top-10 left-4 lg:left-10"}>New Records</h2>
-      <div className={"flex gap-8 px-8 items-center gradient-overlay overflow-x-auto snap-x snap-mandatory no-scrollbar"}>
+      <div className={"flex gap-2 px-8 items-center gradient-overlay overflow-x-auto snap-x snap-mandatory no-scrollbar"}>
         {data.list.map((album, idx) => (
           <div className={'flex mt-10'} key={`${album.id}-${idx}`}>
             <div className="">
