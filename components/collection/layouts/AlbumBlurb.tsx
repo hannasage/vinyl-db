@@ -1,5 +1,5 @@
 import React from 'react';
-import * as AlbumCard from '@/components/molecule/AlbumCard';
+import * as AlbumCard from '@/components/collection/layouts/AlbumCard';
 import classNames from 'classnames';
 import { ThemeType } from '@/components/themeTypes';
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
-import * as AlbumCard from '@/components/molecule/AlbumCard';
+import * as AlbumCard from '@/components/collection/layouts/AlbumCard';
 
 interface AlbumListRes {
   list: Array<{

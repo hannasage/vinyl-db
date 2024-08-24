@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation';
 import React from 'react';
 import { Collection, CollectionEntry } from '@/data/types';
 import Image from 'next/image';
-import * as AlbumBlurb from '@/components/molecule/AlbumBlurb'
-import * as AlbumCard from '@/components/molecule/AlbumCard'
+import * as AlbumBlurb from '@/components/collection/layouts/AlbumBlurb'
+import * as AlbumCard from '@/components/collection/layouts/AlbumCard'
 import classNames from 'classnames';
 import Link from 'next/link';
 import type { Metadata } from 'next'

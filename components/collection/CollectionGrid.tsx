@@ -1,5 +1,5 @@
 import React from 'react';
-import CollectionCard from '../molecule/CollectionCard';
+import CollectionCard from './CollectionCard';
 import { Collection } from '@/data/types';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';

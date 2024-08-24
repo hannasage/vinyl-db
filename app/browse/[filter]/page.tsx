@@ -1,5 +1,5 @@
 import React from 'react';
-import AlbumGrid from '@/components/organism/AlbumGrid';
+import AlbumGrid from '@/components/sections/AlbumGrid';
 import { createClient } from '@/utils/supabase/server';
 import { SortType, sortLegacyEntries } from '@/data/filters';
 import { FullAlbumDetails } from '@/data/types';

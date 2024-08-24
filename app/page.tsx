@@ -1,6 +1,6 @@
 import React from 'react';
-import NewestAlbumsScroller from '@/components/organism/NewestAlbumsScroller';
-import CollectionGrid from '@/components/organism/CollectionGrid';
+import NewestAlbumsScroller from '@/components/sections/NewestAlbumsScroller';
+import CollectionGrid from '@/components/collection/CollectionGrid';
 import './globals.css'
 
 export default async function Page() {
