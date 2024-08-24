@@ -16,17 +16,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const title = "vinyl"
+  // const title = "vinyl"
   return (
     <html lang="en">
       <body className={inter.className}>
-        <h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-3xl spacing tracking-tighter"}>
-          {title}
-        </h1>
+        {/*<h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-manilla text-4xl spacing tracking-tighter"}>*/}
+        {/*  {title}*/}
+        {/*</h1>*/}
         <nav>
           <Navigation />
         </nav>
-        <main className={"absolute top-20"}>
+        <main className={"absolute left-0 right-0 top-0 bottom-0"}>
           {children}
         </main>
       </body>

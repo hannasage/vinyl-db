@@ -11,13 +11,15 @@ export function propsCheck(p: Props) {
 }
 
 const styleColors: Record<ThemeType, { bg: string, text: string }> = {
-  blueGray: { bg: 'bg-gray-900', text: 'text-blue-400'},
-  sunset: { bg: 'bg-dusk', text: 'text-purple-400' }
+  blackWhite: { bg: 'bg-black', text: 'text-gray-200' },
+  blueGray: { bg: 'bg-gray-900', text: 'text-blue-300'},
+  sunset: { bg: 'bg-dusk', text: 'text-purple-400' },
+  greenOut: { bg: 'bg-green-900', text: 'text-green-200' }
 }
 
-export async function AlbumBlurb({ albumId, blurb, reverse, theme = 'blueGray' }: Props) {
+export async function AlbumBlurb({ albumId, blurb, reverse, showArtist, theme = 'blackWhite' }: Props) {
   return (
-    <div className={`px-4 py-8 sm:p-8 lg:p-16 my-8 w-full mx-auto ${styleColors?.[theme].bg}`}>
+    <div className={`px-4 py-8 sm:p-8 lg:p-16 w-full mx-auto ${styleColors?.[theme].bg}`}>
       <section className={classNames(
         "flex",
         "flex-col",
@@ -31,7 +33,7 @@ export async function AlbumBlurb({ albumId, blurb, reverse, theme = 'blueGray' }
           ["md:flex-row"]: !reverse
         }
       )}>
-        <AlbumCard.AlbumCard albumId={albumId} callout={true} background={false} showArtist={false} theme={theme} />
+        <AlbumCard.AlbumCard albumId={albumId} callout={true} background={false} showArtist={showArtist} theme={theme} />
         <p className={classNames(
           'm-auto',
           'text-justify',

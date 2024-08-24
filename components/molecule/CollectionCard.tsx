@@ -23,7 +23,7 @@ export default function CollectionCard({ coverImageUrl, title, id, shortDescript
           className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
           {/* Text Content */}
           <div className="p-4">
-            <h3 className="sm:text-md md:text-lg lg:text-xl font-semibold tracking-tight">{title}</h3>
+            <p className="sm:text-md md:text-lg lg:text-xl font-semibold tracking-tight text-white">{title}</p>
             <p className={"hidden md:block text-sm text-gray-500 -mt-0.5 italic"}>{shortDescription}</p>
           </div>
         </div>

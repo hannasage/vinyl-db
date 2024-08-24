@@ -1,1 +1,1 @@
-export type ThemeType = "blueGray" | "sunset"
+export type ThemeType = "blackWhite" | "blueGray" | "sunset" | "greenOut"
