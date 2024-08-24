@@ -12,9 +12,9 @@ export default async function CollectionGrid() {
     await sb.functions.invoke<{ collections: Collection[] }>('get-collection-list');
   if (error) redirect('/error');
   return data?.collections.length ? (
-    <div className={"default-page-padding"}>
-      <h2 className={"text-xl mb-4 tracking-tight"}>Collections</h2>
-      <section className="columns-2 md:columns-3 lg:columns-4 gap-4">
+    <div className={"page-container"}>
+      <h2 className={"section-heading"}>Collections</h2>
+      <section className="mt-8 columns-2 md:columns-3 lg:columns-4 gap-4">
         {data.collections
           .sort((a, b) => sortByTime(new Date(a.created_at), new Date(b.created_at)))
           .map((collection, index) => (

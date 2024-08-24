@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     const listOptions = {
       newest: await supabase
         .from('album')
-        .select('*')
+        .select('id, title, artist_id, acquired_date, artwork_url')
         .gte('acquired_date', new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString())
         .lte('acquired_date', new Date(Date.now()).toISOString()),
       all: await supabase.from('album').select('*')

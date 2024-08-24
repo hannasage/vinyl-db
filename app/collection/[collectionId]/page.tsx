@@ -75,54 +75,52 @@ function BackButton() {
 export default async function Page({ params }: Props) {
   const { collectionData } = await fetchCollection(params.collectionId)
   return (
-    <main className="flex min-h-screen flex-col items-start">
+    <div className="flex min-h-screen flex-col items-start">
       {collectionData?.bannerImageUrl ? (
-        <div className={"relative w-full h-[600px] -top-28"}>
+        <div className={"page-hero-container"}>
           <Image
             fill
             src={collectionData.bannerImageUrl}
             alt={`cover for collection: ${collectionData.title}`}
-            className={"object-cover object-top"}
           />
           {/* Gradient Overlay */}
-          <div
-            className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black via-black/65 to-transparent">
-            {/* Text Content */}
-            <div className="w-full max-w-screen-lg mx-auto px-4 pb-10">
-              <div className={classNames(
-                'py-10',
-              )}>
-                <Link className={classNames(
-                  'bg-gradient-to-br from-red-500 to-purple-500',
-                  'drop-shadow-glowPurple',
-                  'px-6 py-3',
-                  'hover:cursor-pointer',
-                  'text-white',
-                  'font-semibold',
-                  'rounded-full',
-                )} href={'/'}>Back</Link>
+          <div className="gradient-overlay">
+            <div className={'flex flex-col justify-end h-full'}>
+              <div className="w-full max-w-screen-lg mx-auto px-4 pb-10">
+                <div className={classNames(
+                  'py-10',
+                )}>
+                  <Link className={classNames(
+                    'bg-gradient-to-br from-red-500 to-purple-500',
+                    'drop-shadow-glowPurple',
+                    'px-6 py-3',
+                    'hover:cursor-pointer',
+                    'text-white',
+                    'font-semibold',
+                    'rounded-full',
+                  )} href={'/'}>Back</Link>
+                </div>
+                <h1 className="section-heading text-4xl">{collectionData!.title}</h1>
+                <p className={'text-sm text-gray-400 italic'}>{collectionData!.shortDescription}</p>
+                <p className={'text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]'}>{collectionData!.longDescription}</p>
               </div>
-              <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-manilla">{collectionData!.title}</h1>
-              <p className={'text-sm text-gray-400 italic'}>{collectionData!.shortDescription}</p>
-              <p className={'text-sm text-gray-300 mt-4 w-full lg:max-w-[75%]'}>{collectionData!.longDescription}</p>
             </div>
           </div>
         </div>
       ) : (
         <div className="flex flex-col w-full max-w-screen-lg mx-auto px-4 pb-10">
           <BackButton />
-          <h1
-            className="text-2xl md:text-3xl lg:text-5xl font-semibold tracking-tight">{collectionData!.title}</h1>
-          <p className={"text-sm text-gray-400 italic"}>{collectionData!.shortDescription}</p>
-          <p className={"text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]"}>{collectionData!.longDescription}</p>
+          <h1 className={'font-black tracking-tighter '}>{collectionData!.title}</h1>
+          <p className={'text-sm text-gray-400 italic'}>{collectionData!.shortDescription}</p>
+          <p className={'text-sm text-gray-300 mt-4 w-full lg:max-w-[45%]'}>{collectionData!.longDescription}</p>
         </div>
       )}
-      <div className={"relative flex flex-wrap justify-center items-center w-full -top-28"}>
+      <div className={'relative flex flex-wrap justify-center items-center w-full'}>
         {collectionData.entries &&
           collectionData.entries
             .sort((eA, eB) => {
-              if (eA.position === null) return -999
-              return  eA.position - eB.position;
+              if (eA.position === null) return -999;
+              return eA.position - eB.position;
             })
             .map((e, idx) => {
               const Component = () => renderLayout(e.layout, e.layoutProps, e.albumId);
@@ -130,6 +128,6 @@ export default async function Page({ params }: Props) {
             })
         }
       </div>
-    </main>
+    </div>
   );
 }

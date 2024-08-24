@@ -23,10 +23,16 @@
 }
 
 @layer base {
-  body {
-    @apply bg-manilla;
+  html {
+    scrollbar-gutter: stable;
   }
 
+  body {
+    @apply bg-black w-screen;
+  }
+}
+
+@layer components {
   h1,
   h2,
   h3,
@@ -66,16 +72,55 @@
     }
   }
 
-  .page-left-padding {
-    @apply sm:pl-4 pl-10;
+  .page-container {
+    padding: 0 1rem;
+    @media screen(lg) {
+      padding: 0 2.5rem;
+    }
   }
 
-  .page-right-padding {
-    @apply sm:pr-4 pr-10;
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-red-500 to-purple-600
   }
 
-  .default-page-padding {
-    @apply page-left-padding page-right-padding;
+  .section-heading {
+    @apply font-black tracking-tighter gradient-text
+  }
+
+  .page-hero-container {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    /*top: -7rem;*/
+
+    img {
+      object-fit: cover;
+      object-position: top;
+    }
+
+    .gradient-overlay {
+      position: absolute;
+      inset: 0;
+      @apply bg-gradient-to-t from-black via-black/70 to-transparent;
+    }
+  }
+
+  .snap-scroller-hero {
+    display: flex;
+    /*max-width: 100vw;*/
+    height: 100%;
+    overflow-x: scroll;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    gap: 16px; /* Adjust the spacing between items */
+    padding: 16px; /* Adjust the padding around the container */
+
+    .item {
+      flex: 0 0 25%; /* 25% width for 4 items per page on desktop */
+      scroll-snap-align: start;
+      box-sizing: border-box;
+      padding: 8px;
+    }
   }
 }
 
