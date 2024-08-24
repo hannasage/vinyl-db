@@ -26,11 +26,11 @@ const styleColors: Record<ThemeType, {
   glow: string
 }> = {
   blackWhite: {
-    text: 'text-gray-800',
+    text: 'text-gray-100',
     bg: classNames(
       'bg-gradient-to-r',
-      'from-gray-200',
-      'to-gray-300',
+      'from-gray-600',
+      'to-gray-700',
       'pb-3',
       'rounded-lg'
     ),
