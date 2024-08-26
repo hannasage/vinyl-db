@@ -151,9 +151,11 @@ export async function AlbumCard({
           'mx-2',
           'opacity-50',
           'text-sm',
+          'whitespace-nowrap',
+          'truncate',
           styleColors?.[theme].text
         )}>
-          {album.release_year}
+          {album.release_year}{album.variant && `, ${album.variant}`}
         </p>
       </div>
     )
