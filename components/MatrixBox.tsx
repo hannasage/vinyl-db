@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlbumArt, AlbumArtBaseProps } from '@/components/atom/AlbumArt';
+import { Button, ButtonBaseProps } from '@/components/atom/Button';
 
 interface MatrixBoxProps<T> {
   props: T
@@ -10,7 +11,7 @@ interface MatrixBoxProps<T> {
 export type MatrixBoxBaseProps = Pick<MatrixBoxProps<any>, "size" | "className">
 
 /** A switch renderer for the various type of UI boxes available */
-const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T>) => {
+export const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T>) => {
 
   // TODO: validate props against type requirements
 
@@ -18,6 +19,7 @@ const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T>) => {
     case 'album':
       return <AlbumArt size={size} className={className} {...props as AlbumArtBaseProps} />
     case 'button':
+      return <Button size={size} className={className} {...props as ButtonBaseProps} />
     case 'link':
     case 'text':
     default:
@@ -25,4 +27,3 @@ const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T>) => {
   }
 }
 
-export default MatrixBox
