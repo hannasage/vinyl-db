@@ -8,16 +8,16 @@ import {
   LinkBoxBaseProps
 } from '@/components/boxes';
 
-interface MatrixBoxProps<T> {
-  props: T
+interface MatrixBoxProps {
+  props: object,
   size: number,
   type: "album" | "button" | "link" | "text",
   className?: string,
 }
-export type MatrixBoxBaseProps = Pick<MatrixBoxProps<any>, "size" | "className">
+export type MatrixBoxBaseProps = Pick<MatrixBoxProps, "size" | "className">
 
 /** A switch renderer for the various type of UI boxes available */
-export const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T>) => {
+export const MatrixBox = ({ type, size, className, props }: MatrixBoxProps) => {
 
   // TODO: validate props against type requirements
 

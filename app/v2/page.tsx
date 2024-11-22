@@ -1,8 +1,8 @@
 import React from 'react';
-import { AlbumArtBox } from '@/components/boxes/AlbumArtBox';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import DotMatrixBackground from '@/components/DotMatrixBackground';
+import { MatrixBox } from '@/components/MatrixBox';
 
 interface AlbumListRes {
   list: Array<{
@@ -18,14 +18,14 @@ interface AlbumListRes {
 export default async function Page() {
   const sb = createClient()
   const { data, error } = await sb.functions.invoke<AlbumListRes>('get-album-list', { body: {
-      list: "newest"
+      list: "all"
     }});
   if (!data || error) redirect('/error')
   return (
     <>
       <DotMatrixBackground />
-      <div className={"flex"}>
-        {data.list.map((a, i) => <AlbumArtBox key={i} size={500} {...a} />)}
+      <div className={"flex flex-wrap"}>
+        {data.list.map((album, i) => <MatrixBox type="album" key={i} size={476} props={album} />)}
       </div>
     </>
   );
