@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlbumArt } from '@/components/atom/AlbumArt';
+import { AlbumArtBox } from '@/components/boxes/AlbumArtBox';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import DotMatrixBackground from '@/components/DotMatrixBackground';
@@ -25,7 +25,7 @@ export default async function Page() {
     <>
       <DotMatrixBackground />
       <div className={"flex"}>
-        {data.list.map((a, i) => <AlbumArt key={i} size={500} {...a} />)}
+        {data.list.map((a, i) => <AlbumArtBox key={i} size={500} {...a} />)}
       </div>
     </>
   );

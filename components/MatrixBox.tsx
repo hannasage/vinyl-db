@@ -1,6 +1,12 @@
 import React from 'react';
-import { AlbumArt, AlbumArtBaseProps } from '@/components/atom/AlbumArt';
-import { Button, ButtonBaseProps } from '@/components/atom/Button';
+import {
+  AlbumArtBox,
+  ButtonBox,
+  LinkBox,
+  AlbumArtBaseProps,
+  ButtonBaseProps,
+  LinkBoxBaseProps
+} from '@/components/boxes';
 
 interface MatrixBoxProps<T> {
   props: T
@@ -17,10 +23,11 @@ export const MatrixBox = <T,>({ type, size, className, props }: MatrixBoxProps<T
 
   switch (type) {
     case 'album':
-      return <AlbumArt size={size} className={className} {...props as AlbumArtBaseProps} />
+      return <AlbumArtBox size={size} className={className} {...props as AlbumArtBaseProps} />
     case 'button':
-      return <Button size={size} className={className} {...props as ButtonBaseProps} />
+      return <ButtonBox size={size} className={className} {...props as ButtonBaseProps} />
     case 'link':
+      return <LinkBox size={size} className={className} {...props as LinkBoxBaseProps} />
     case 'text':
     default:
       return <div></div>
