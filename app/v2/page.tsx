@@ -1,16 +1,32 @@
 import React from 'react';
 import { AlbumArt } from '@/components/atom/AlbumArt';
+import { createClient } from '@/utils/supabase/server';
+import { redirect } from 'next/navigation';
+import DotMatrixBackground from '@/components/DotMatrixBackground';
 
-const album = {
-  artwork_url: "https://dwnodxgkqevbqfkfyggd.supabase.co/storage/v1/object/public/artwork/soccermommy-evergreen.jpeg",
-  title: "Evergreen",
-  artist_name: "Soccer Mommy"
+interface AlbumListRes {
+  list: Array<{
+    id: number,
+    title: string,
+    artist_id: number,
+    acquired_date: string,
+    artist_name: string,
+    artwork_url: string,
+  }>
 }
 
 export default async function Page() {
+  const sb = createClient()
+  const { data, error } = await sb.functions.invoke<AlbumListRes>('get-album-list', { body: {
+      list: "newest"
+    }});
+  if (!data || error) redirect('/error')
   return (
-    <div>
-      <AlbumArt {...album} size={500} />
-    </div>
+    <>
+      <DotMatrixBackground />
+      <div className={"flex"}>
+        {data.list.map((a, i) => <AlbumArt key={i} size={500} {...a} />)}
+      </div>
+    </>
   );
 }
