@@ -2,7 +2,9 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Navigation from '@/components/sections/Navigation';
+import DotMatrixBackground from '@/components/DotMatrixBackground';
+import { LinkBoxBaseProps } from '@/components/boxes';
+import { MatrixBox } from '@/components/MatrixBox';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,12 +25,23 @@ export default async function RootLayout({
         {/*<h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-manilla text-4xl spacing tracking-tighter"}>*/}
         {/*  {title}*/}
         {/*</h1>*/}
-        <nav>
-          <Navigation />
+        <nav className={"absolute top-0"}>
+          <MatrixBox type={"link"} size={0} props={{
+            href: "/v2",
+            type: "nav",
+          } as LinkBoxBaseProps} />
         </nav>
-        <main className={"absolute left-0 right-0 top-0 bottom-0"}>
+        <main className={"absolute top-0 bottom-0 left-0 right-0"}>
           {children}
         </main>
+        <nav className={"absolute bottom-0"}>
+          <MatrixBox type={"link"} size={0} props={{
+            href: "/v2",
+            type: "nav",
+          } as LinkBoxBaseProps} />
+        </nav>
+        {/* TODO: Fix responsive scaling bug w/ dot matrix */}
+        {/*<DotMatrixBackground />*/}
       </body>
     </html>
   );

@@ -1,7 +1,6 @@
 import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
-import DotMatrixBackground from '@/components/DotMatrixBackground';
 import { MatrixBox } from '@/components/MatrixBox';
 
 interface AlbumListRes {
@@ -23,10 +22,9 @@ export default async function Page() {
   if (!data || error) redirect('/error')
   return (
     <>
-      <DotMatrixBackground />
-      <div className={"flex flex-wrap"}>
-        {data.list.map((album, i) => <MatrixBox type="album" key={i} size={476} props={album} />)}
-      </div>
+      {/*<div className={"flex flex-wrap"}>*/}
+      {/*  {data.list.map((album, i) => <MatrixBox type="album" key={i} size={476} props={album} />)}*/}
+      {/*</div>*/}
     </>
   );
 }

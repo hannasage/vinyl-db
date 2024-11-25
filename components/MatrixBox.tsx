@@ -17,7 +17,12 @@ interface MatrixBoxProps {
 export type MatrixBoxBaseProps = Pick<MatrixBoxProps, "size" | "className">
 
 /** A switch renderer for the various type of UI boxes available */
-export const MatrixBox = ({ type, size, className, props }: MatrixBoxProps) => {
+export const MatrixBox = ({
+  type,
+  size,
+  className,
+  props
+}: MatrixBoxProps) => {
 
   // TODO: validate props against type requirements
 

@@ -10,6 +10,8 @@ const config: Config = {
     extend: {
       colors: {
         dusk: "#120f21",
+        brandLightGray: "#F5F5F5",
+        brandDarkGray: "#202020",
         manilla: "rgb(245, 241, 230)",
         manillaDark: "rgb(74, 71, 61)",
         manillaLink: "rgb(229,102,15)",
