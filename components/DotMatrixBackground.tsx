@@ -53,7 +53,7 @@ const DotMatrixBackground: React.FC<DotMatrixOverlayProps> = ({
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 z-[-1]" // Tailwind classes for positioning
+      className="fixed inset-0 z-[-1]" // Tailwind classes for positioning
     />
   );
 };

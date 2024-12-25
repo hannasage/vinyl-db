@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
-import { MatrixBox } from '@/components/MatrixBox';
+import ContentGrid  from '@/components/sections/ContentGrid'
 
 interface AlbumListRes {
   list: Array<{
@@ -20,11 +20,23 @@ export default async function Page() {
       list: "all"
     }});
   if (!data || error) redirect('/error')
+
+  const FilterSortBar = () => (
+    <div className={'flex w-screen bg-brandLightGray drop-shadow-lg p-5 sticky'}>
+      <h1
+        className={'font-light text-manillaDark text-4xl spacing tracking-wider'}>
+        vinyl
+      </h1>
+    </div>
+  );
+
+
+
   return (
     <>
-      {/*<div className={"flex flex-wrap"}>*/}
-      {/*  {data.list.map((album, i) => <MatrixBox type="album" key={i} size={476} props={album} />)}*/}
-      {/*</div>*/}
+      <FilterSortBar />
+      <ContentGrid data={data} />
     </>
-  );
+  )
+    ;
 }

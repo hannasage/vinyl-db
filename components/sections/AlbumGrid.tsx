@@ -1,5 +1,5 @@
 import React from 'react';
-import AlbumCover from '@/components/collection/layouts/AlbumCover';
+import AlbumCover from '@/components/atom/AlbumCover';
 import { FullAlbumDetails } from '@/data/types';
 
 const AlbumGrid = ({ albums }: { albums: FullAlbumDetails[] }) => {
