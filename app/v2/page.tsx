@@ -3,16 +3,11 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import ContentGrid  from '@/components/sections/ContentGrid'
 import { FilterSortBar } from '@/components/FilterSortBar';
+import { sortLegacyEntries } from '@/data/filters';
+import { FullAlbumDetails } from '@/data/types';
 
 export interface AlbumListRes {
-  list: Array<{
-    id: number,
-    title: string,
-    artist_id: number,
-    acquired_date: string,
-    artist_name: string,
-    artwork_url: string,
-  }>
+  list: Array<FullAlbumDetails>
 }
 
 export default async function Page() {
@@ -23,12 +18,10 @@ export default async function Page() {
     }
   });
   if (!data || error) redirect('/error')
-
   return (
     <>
       <FilterSortBar />
-      <ContentGrid data={data as AlbumListRes} />
+      <ContentGrid data={sortLegacyEntries(data.list, "artist-alphabetical")} />
     </>
   )
-    ;
 }
