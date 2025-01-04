@@ -43,6 +43,7 @@ const SortButton = ({
   disabled,
   setActive,
   setOrder,
+  noDir = false,
   active = false,
   asc = false
 }: Omit<ButtonDefaultProps, 'label'> &
@@ -51,10 +52,11 @@ const SortButton = ({
     setOrder: () => void,
     active?: boolean,
     asc?: boolean
+    noDir?: boolean
   }) => {
   const AscDescArrows = () => (
     <div className={classNames('mt-[2px]', 'text-white', {
-      ['hidden']: !active
+      ['hidden']: !active || noDir
     })}>
         <span className={classNames({
           ['opacity-50']: !asc && active,
@@ -107,17 +109,24 @@ export const FilterButtonRow = () => {
       )}
     </ul>
   );
-  const SORT_OPTIONS = ['Artist Name', 'Title', 'Released', 'Coming Soon']
+  type Sort = { title: string, noDir?: boolean }
+  const SORT_OPTIONS: Sort[] = [
+    { title: 'Artist Name' },
+    { title: 'Title' },
+    { title: 'Released' },
+    { title: 'Coming Soon', noDir: true }
+  ]
   const SortOptions = () => (
     <ul className={'flex flex-row gap-6 my-auto'}>
       {SORT_OPTIONS.map((s, i) => (
         <li key={`${i}-sortOption`}>
           <SortButton
-            title={s}
+            title={s.title}
             setActive={() => setActiveSortType(i)}
             setOrder={() => setActiveSortDir(p => p === 0 ? 1 : 0)}
             active={isActive(i)}
             asc={isAsc()}
+            noDir={s.noDir}
           />
         </li>
       ))}
