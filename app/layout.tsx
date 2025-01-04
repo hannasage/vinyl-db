@@ -1,10 +1,10 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { Inter } from "next/font/google";
+import { Anybody } from "next/font/google";
+import DotMatrixBackground from '@/components/DotMatrixBackground';
 import "./globals.css";
-import Navigation from '@/components/molecule/Navigation';
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Anybody({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "some chick's vinyl collection",
@@ -16,19 +16,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // const title = "vinyl"
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/*<h1 className={"absolute top-10 left-4 lg:left-10 z-50 font-black text-manilla text-4xl spacing tracking-tighter"}>*/}
-        {/*  {title}*/}
-        {/*</h1>*/}
-        <nav>
-          <Navigation />
-        </nav>
-        <main className={"absolute left-0 right-0 top-0 bottom-0"}>
+        <main>
           {children}
         </main>
+        {/* TODO: Fix responsive scaling bug w/ dot matrix */}
+        <DotMatrixBackground />
       </body>
     </html>
   );

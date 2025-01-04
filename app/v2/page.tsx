@@ -1,10 +1,10 @@
-import { FullAlbumDetails } from '@/data/types';
+import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
+import ContentGrid  from '@/components/ContentGrid'
 import { FilterSortBar } from '@/components/FilterSortBar';
-import ContentGrid from '@/components/ContentGrid';
 import { sortLegacyEntries } from '@/data/filters';
-import React from 'react';
+import { FullAlbumDetails } from '@/data/types';
 
 export interface AlbumListRes {
   list: Array<FullAlbumDetails>
