@@ -2,7 +2,7 @@ import { FullAlbumDetails } from '@/data/types';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import { FilterSortBar } from '@/components/FilterSortBar';
-import ContentGrid from '@/components/sections/ContentGrid';
+import ContentGrid from '@/components/ContentGrid';
 import { sortLegacyEntries } from '@/data/filters';
 import React from 'react';
 

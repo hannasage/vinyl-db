@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
-import ContentGrid  from '@/components/sections/ContentGrid'
+import ContentGrid  from '@/components/ContentGrid'
 import { FilterSortBar } from '@/components/FilterSortBar';
 import { sortLegacyEntries } from '@/data/filters';
 import { FullAlbumDetails } from '@/data/types';
