@@ -16,7 +16,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const title = "vinyl"
   return (
     <html lang="en">
       <body className={inter.className}>
