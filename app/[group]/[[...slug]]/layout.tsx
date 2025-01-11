@@ -20,19 +20,14 @@ export default async function RootLayout({
   params: Promise<{ group: string, slug: string [] }>;
 }>) {
   const { group, slug } = await params;
-  const navData = slug.length ? {
-    activeGroup: group,
-    sortOpt: slug[0],
-    order: slug?.[1],
-  } : {
-    activeGroup: group,
-    sortOpt: undefined,
-    order: undefined,
-  }
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Navigation data={navData} />
+        <Navigation data={{
+          activeGroup: group,
+          sortOpt: slug?.[0],
+          order: slug?.[1],
+        }} />
         <main>
           {children}
         </main>
