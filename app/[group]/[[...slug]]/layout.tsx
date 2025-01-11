@@ -2,7 +2,8 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Anybody } from "next/font/google";
 import DotMatrixBackground from '@/components/DotMatrixBackground';
-import "./globals.css";
+import "../../globals.css";
+import { Navigation } from '@/components/Navigation';
 
 const inter = Anybody({ subsets: ["latin"] });
 
@@ -13,12 +14,25 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({
   children,
+  params,
 }: Readonly<{
   children: React.ReactNode;
+  params: Promise<{ group: string, slug: string [] }>;
 }>) {
+  const { group, slug } = await params;
+  const navData = slug.length ? {
+    activeGroup: group,
+    sortOpt: slug[0],
+    order: slug?.[1],
+  } : {
+    activeGroup: group,
+    sortOpt: undefined,
+    order: undefined,
+  }
   return (
     <html lang="en">
       <body className={inter.className}>
+        <Navigation data={navData} />
         <main>
           {children}
         </main>

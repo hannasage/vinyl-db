@@ -2,8 +2,9 @@
 const nextConfig = {
   async redirects() {
     return [
-      { source: '/browse/:slug', destination: '/', permanent: true },
-      { source: '/collection/:slug', destination: '/', permanent: true }
+      { source: '/', destination: '/albums', permanent: true },
+      { source: '/browse/:slug', destination: '/albums', permanent: true },
+      { source: '/collection/:slug', destination: '/albums', permanent: true }
     ]
   },
   images: {
