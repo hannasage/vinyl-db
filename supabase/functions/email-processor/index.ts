@@ -125,18 +125,56 @@ const auth = new google.auth.GoogleAuth({
 const gmail = google.gmail({ version: 'v1', auth })
 */
 
-const RELEVANT_SENDERS = [
-  { email: 'orders@turntablelab.com', name: 'Turntable Lab' },
-  { email: 'vinyl@roughtraderecords.com', name: 'Rough Trade' },
-  // Add other relevant senders
-]
+async function isKnownRetailer(email: string): Promise<boolean> {
+  const { data: retailers, error } = await supabase
+    .from('retailer')
+    .select('email')
+    .eq('email', email.toLowerCase())
+    .limit(1)
+
+  if (error) {
+    console.error('Error checking retailer:', error)
+    return false
+  }
+
+  return retailers.length > 0
+}
+
+async function addNewRetailer(name: string, email: string): Promise<void> {
+  const { error } = await supabase
+    .from('retailer')
+    .insert({ name, email: email.toLowerCase() })
+
+  if (error) {
+    console.error('Error adding new retailer:', error)
+  } else {
+    console.log(`Added new trusted retailer: ${name} (${email})`)
+  }
+}
 
 async function isRelevantEmail(headers: { name: string; value: string }[]) {
   const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || ''
   const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || ''
+  
+  // Extract email and name from From header
+  const emailMatch = from.match(/<([^>]+)>/) || from.match(/([^\s]+@[^\s]+)/)
+  if (!emailMatch) {
+    console.log(`Could not find sender email header: ${from}`)
+    return false
+  }
+  
+  const email = emailMatch[1].toLowerCase()
+  const name = from.split('<')[0].trim() || email.split('@')[0]
 
+  // First check if this is a known retailer
+  if (await isKnownRetailer(email)) { 
+    console.log(`Found known retailer: ${name} <(${email})>`)
+    return true 
+  }
+
+  // If not known, use GPT to analyze
   const prompt = `
-    Analyze this email sender and subject to determine if it's likely a vinyl record purchase orconfirmation:
+    Analyze this email sender and subject to determine if it's likely a vinyl record purchase or confirmation:
     
     From: ${from}
     Subject: ${subject}
@@ -172,14 +210,15 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
       analysis: result
     })
 
+    // If highly confident and relevant, add to trusted retailers
+    if (result.isRelevant && result.confidence >= 0.8) {
+      await addNewRetailer(name, email)
+    }
+
     return result.isRelevant && result.confidence > 0.7
   } catch (error) {
-    console.error('Error analyzing email relevance: ', error)
-    // Fall back to basic keyword matching if AI fails
-    return RELEVANT_SENDERS.some(sender =>
-      from.toLowerCase().includes(sender.email) &&
-      (subject.toLowerCase().includes('order') || subject.toLowerCase().includes('purchase'))
-    )
+    console.error('Error analyzing email relevance:', error)
+    return false
   }
 }
 
@@ -255,7 +294,7 @@ async function findArtistId(artistName: string): Promise<string | null> {
       return null
     }
 
-    console.log(`Inserted artist ${artistName}: ${newArtist}`)
+    console.log(`Inserted artist ${artistName}: ${newArtist.id}`)
     return newArtist.id
   }
 
@@ -316,6 +355,7 @@ async function processEmails() {
             subject: email.headers.find(h => h.name === 'subject')?.value,
             parsed: parsedData
           })
+          console.log(`Inserted album ${parsedData.title} for artist ${parsedData.artistName}`)
         }
       } catch (error) {
         console.error('Error processing email:', error)
@@ -345,4 +385,4 @@ serve(async (_req) => {
       headers: { "Content-Type": "application/json" },
     })
   }
-}) 
+})
