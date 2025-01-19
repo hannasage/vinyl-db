@@ -88,11 +88,53 @@ const TEST_EMAILS: TestEmail[] = [
   }
 ]
 
-// Zod schemas for GPT responses
+// Email processing types
+type EmailType = 'purchase' | 'shipping' | 'delivery' | 'unknown'
+
+interface ProcessingState {
+  emailType: EmailType
+  emailData: {
+    from: string
+    senderEmail: string
+    senderName: string
+    subject: string
+    content: string
+  }
+  retailer: {
+    isKnown: boolean
+    id?: string
+    name: string
+    email: string
+  }
+  parsedData?: {
+    size: number
+    title: string
+    artistName: string
+    purchaseDate: string
+    variant: string
+    deliveryDate?: string
+  }
+  artist?: {
+    id: string
+    name: string
+  }
+  album?: {
+    id?: string
+    artist_id: string
+    title: string
+    size: number
+    variant: string
+    purchase_date: string
+    delivery_date?: string
+  }
+}
+
+// Update Zod schemas
 const EmailRelevanceSchema = z.object({
   isRelevant: z.boolean(),
   confidence: z.number().min(0).max(1),
-  reasoning: z.string()
+  reasoning: z.string(),
+  emailType: z.enum(['purchase', 'shipping', 'delivery', 'unknown'])
 })
 
 const EmailParseResultSchema = z.object({
@@ -100,7 +142,8 @@ const EmailParseResultSchema = z.object({
   title: z.string().min(1),
   artistName: z.string().min(1),
   purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  variant: z.string()
+  variant: z.string(),
+  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 })
 
 type EmailParseResult = z.infer<typeof EmailParseResultSchema>
@@ -125,34 +168,51 @@ const auth = new google.auth.GoogleAuth({
 const gmail = google.gmail({ version: 'v1', auth })
 */
 
-async function isKnownRetailer(email: string): Promise<boolean> {
+async function isKnownRetailer(state: ProcessingState): Promise<ProcessingState> {
   const { data: retailers, error } = await supabase
     .from('retailer')
-    .select('email')
-    .eq('email', email.toLowerCase())
+    .select('id, name, email')
+    .eq('email', state.retailer.email)
     .limit(1)
 
   if (error) {
     console.error('Error checking retailer:', error)
-    return false
+    return state
   }
 
-  return retailers.length > 0
+  if (retailers.length > 0) {
+    state.retailer = {
+      isKnown: true,
+      id: retailers[0].id,
+      name: retailers[0].name,
+      email: retailers[0].email
+    }
+  }
+
+  return state
 }
 
-async function addNewRetailer(name: string, email: string): Promise<void> {
+async function addNewRetailer(state: ProcessingState): Promise<ProcessingState> {
+  if (state.retailer.isKnown) return state
+
   const { error } = await supabase
     .from('retailer')
-    .insert({ name, email: email.toLowerCase() })
+    .insert({ 
+      name: state.retailer.name, 
+      email: state.retailer.email 
+    })
 
   if (error) {
     console.error('Error adding new retailer:', error)
   } else {
-    console.log(`Added new trusted retailer: ${name} (${email})`)
+    console.log(`Added new trusted retailer: ${state.retailer.name} (${state.retailer.email})`)
+    state.retailer.isKnown = true
   }
+
+  return state
 }
 
-async function isRelevantEmail(headers: { name: string; value: string }[]) {
+async function isRelevantEmail(headers: { name: string; value: string }[]): Promise<ProcessingState | null> {
   const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || ''
   const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || ''
   
@@ -160,29 +220,59 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
   const emailMatch = from.match(/<([^>]+)>/) || from.match(/([^\s]+@[^\s]+)/)
   if (!emailMatch) {
     console.log(`Could not find sender email header: ${from}`)
-    return false
+    return null
   }
   
   const email = emailMatch[1].toLowerCase()
   const name = from.split('<')[0].trim() || email.split('@')[0]
 
-  // First check if this is a known retailer
-  if (await isKnownRetailer(email)) { 
-    console.log(`Found known retailer: ${name} (${email})`)
-    return true 
+  // Initialize state
+  let state: ProcessingState = {
+    emailType: 'unknown',
+    emailData: {
+      from,
+      senderEmail: email,
+      senderName: name,
+      subject,
+      content: ''
+    },
+    retailer: {
+      isKnown: false,
+      name,
+      email
+    }
   }
 
-  // If not known, use GPT to analyze
+  // Check known retailers first
+  state = await isKnownRetailer(state)
+  if (state.retailer.isKnown) {
+    // Simple pattern matching for known retailers
+    if (subject.toLowerCase().includes('delivered') || subject.toLowerCase().includes('delivery')) {
+      state.emailType = 'delivery'
+      return state
+    }
+    if (subject.toLowerCase().includes('shipped') || subject.toLowerCase().includes('shipping')) {
+      state.emailType = 'shipping'
+      return state
+    }
+    if (subject.toLowerCase().includes('order') || subject.toLowerCase().includes('purchase')) {
+      state.emailType = 'purchase'
+      return state
+    }
+  }
+
+  // For unknown senders, use GPT
   const prompt = `
-    Analyze this email sender and subject to determine if it's likely a vinyl record purchase or confirmation:
+    Analyze this email sender and subject to determine if it's about a vinyl record:
     
     From: ${from}
     Subject: ${subject}
 
     Return a JSON object with:
-    - isRelevant: boolean indicating if this is likely a vinyl purchase email
+    - isRelevant: boolean indicating if this is about vinyl records
     - confidence: number between 0-1 indicating confidence level
     - reasoning: brief explanation of the decision
+    - emailType: one of ['purchase', 'shipping', 'delivery', 'unknown'] based on the subject
   `
 
   try {
@@ -191,7 +281,7 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
       messages: [
         {
           role: "system",
-          content: "You are a precise assistant that analyzes email metadata to detect vinyl record purchase confirmations."
+          content: "You are a precise assistant that analyzes email metadata to detect vinyl record related emails."
         },
         { role: "user", content: prompt }
       ],
@@ -202,7 +292,6 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
       JSON.parse(completion.choices[0].message.content)
     )
 
-    // Log the analysis for monitoring
     console.log({
       timestamp: new Date().toISOString(),
       from,
@@ -210,31 +299,38 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
       analysis: result
     })
 
-    // If highly confident and relevant, add to trusted retailers
     if (result.isRelevant && result.confidence >= 0.8) {
-      await addNewRetailer(name, email)
+      state = await addNewRetailer(state)
     }
 
-    return result.isRelevant && result.confidence > 0.7
+    if (result.isRelevant && result.confidence > 0.7) {
+      state.emailType = result.emailType
+      return state
+    }
   } catch (error) {
     console.error('Error analyzing email relevance:', error)
-    return false
   }
+
+  return null
 }
 
-async function parseEmailWithAI(content: string): Promise<EmailParseResult> {
+async function parseEmailWithAI(state: ProcessingState): Promise<ProcessingState> {
+  if (state.emailType === 'shipping') {
+    return state // Skip processing shipping notifications for now
+  }
+
   const prompt = `
-    Extract the following information from this email about a vinyl record purchase:
+    Extract the following information from this email about a vinyl record:
     - Record size (as a whole number without inches notation)
     - Title of the album
     - Artist name
-    - Purchase date (in YYYY-MM-DD format)
+    - ${state.emailType === 'delivery' ? 'Delivery' : 'Purchase'} date (in YYYY-MM-DD format)
     - Pressing/color variant (including descriptions like splatter, color-in-color, split)
     
-    Format the response as a JSON object with these exact keys: size, title, artistName, purchaseDate, variant
+    Format the response as a JSON object with these exact keys: size, title, artistName, ${state.emailType === 'delivery' ? 'deliveryDate' : 'purchaseDate'}, variant
     
     Email content:
-    ${content}
+    ${state.emailData.content}
   `
 
   try {
@@ -243,7 +339,7 @@ async function parseEmailWithAI(content: string): Promise<EmailParseResult> {
       messages: [
         { 
           role: "system", 
-          content: "You are a precise assistant that extracts vinyl record purchase information from emails. Return only the JSON object with the requested fields." 
+          content: "You are a precise assistant that extracts vinyl record information from emails." 
         },
         { role: "user", content: prompt }
       ],
@@ -254,121 +350,156 @@ async function parseEmailWithAI(content: string): Promise<EmailParseResult> {
       JSON.parse(completion.choices[0].message.content)
     )
 
+    state.parsedData = result
     console.log({
       timestamp: new Date().toISOString(),
+      emailType: state.emailType,
       parsed: result
     })
 
-    return result;
+    return state
   } catch (error) {
-    console.error('Error parsing email content: ', error)
-    throw new Error('Failed to extract album information from email')
+    console.error('Error parsing email content:', error)
+    throw error
   }
 }
 
-async function findArtistId(artistName: string): Promise<string | null> {
+async function findOrCreateArtist(state: ProcessingState): Promise<ProcessingState> {
+  if (!state.parsedData?.artistName) return state
+
   const { data: artists, error } = await supabase
     .from('artist')
     .select('id, name')
-    .textSearch('name', artistName, {
+    .textSearch('name', state.parsedData.artistName, {
       type: 'websearch',
       config: 'english'
     })
     .limit(1)
 
-    if (error) {
-      console.error(`Artist not found ${artistName}: `, error)
-      return null
-    }
-
-  if (!artists.length) {
-    // Insert new artist
-    const { data: newArtist, error: insertError } = await supabase
-      .from('artist')
-      .insert({ name: artistName })
-      .select('id')
-      .single()
-
-    if (insertError) {
-      console.error(`Error inserting artist ${artistName}: `, insertError)
-      return null
-    }
-
-    console.log(`Inserted artist ${artistName}: ${newArtist.id}`)
-    return newArtist.id
+  if (error) {
+    console.error(`Error finding artist ${state.parsedData.artistName}:`, error)
+    return state
   }
 
-  console.log(`Found artist ${artistName}: ${artists[0].id}`)
-  return artists[0].id
+  if (artists.length > 0) {
+    state.artist = artists[0]
+    return state
+  }
+
+  // Insert new artist
+  const { data: newArtist, error: insertError } = await supabase
+    .from('artist')
+    .insert({ name: state.parsedData.artistName })
+    .select('id, name')
+    .single()
+
+  if (insertError) {
+    console.error(`Error inserting artist ${state.parsedData.artistName}:`, insertError)
+    return state
+  }
+
+  state.artist = newArtist
+  console.log(`Created new artist: ${newArtist.name} (${newArtist.id})`)
+  return state
+}
+
+async function upsertAlbum(state: ProcessingState): Promise<ProcessingState> {
+  if (!state.artist?.id || !state.parsedData) return state
+
+  if (state.emailType === 'purchase') {
+    // Create new album record
+    const albumData = {
+      artist_id: state.artist.id,
+      title: state.parsedData.title,
+      size: state.parsedData.size,
+      variant: state.parsedData.variant,
+      purchase_date: state.parsedData.purchaseDate
+    }
+
+    const { data: album, error } = await supabase
+      .from('album')
+      .insert(albumData)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(`Error inserting album ${state.parsedData.title}:`, error)
+      return state
+    }
+
+    state.album = album
+    console.log(`Created new album: ${album.title}`)
+  } else if (state.emailType === 'delivery' && state.parsedData.deliveryDate) {
+    // Find and update existing album
+    const { data: albums, error: findError } = await supabase
+      .from('album')
+      .select()
+      .eq('artist_id', state.artist.id)
+      .eq('title', state.parsedData.title)
+      .is('delivery_date', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (findError || !albums?.length) {
+      console.error(`Error finding album to update delivery for ${state.parsedData.title}:`, findError)
+      return state
+    }
+
+    const { error: updateError } = await supabase
+      .from('album')
+      .update({ delivery_date: state.parsedData.deliveryDate })
+      .eq('id', albums[0].id)
+
+    if (updateError) {
+      console.error(`Error updating delivery date for album ${state.parsedData.title}:`, updateError)
+      return state
+    }
+
+    state.album = { ...albums[0], delivery_date: state.parsedData.deliveryDate }
+    console.log(`Updated delivery date for album: ${albums[0].title}`)
+  }
+
+  return state
 }
 
 async function processEmails() {
   try {
-    // Use test emails instead of Gmail API
-    const relevantEmails: TestEmail[] = []
+    const results: ProcessingState[] = []
 
-    // Filter relevant emails
+    // Process each email
     for (const email of TEST_EMAILS) {
-      if (await isRelevantEmail(email.headers)) {
-        relevantEmails.push(email)
-      }
-    }
-
-    console.log(`Found ${relevantEmails.length} relevant emails`)
-
-    // Process each relevant email
-    const processedEmails: Array<{
-      from: string | undefined,
-      subject: string | undefined,
-      parsed: EmailParseResult
-    }> = []
-
-    for (const email of relevantEmails) {
       try {
-        const parsedData = await parseEmailWithAI(email.content)
-        const artistId = await findArtistId(parsedData.artistName)
-        
-        if (!artistId) {
-          console.log(`Artist not found: ${parsedData.artistName}`)
+        // Check relevance and initialize state
+        const state = await isRelevantEmail(email.headers)
+        if (!state) continue
+
+        // Add email content to state
+        state.emailData.content = email.content
+
+        // Skip shipping notifications for now
+        if (state.emailType === 'shipping') {
+          console.log('Skipping shipping notification')
           continue
         }
 
-        // Prepare album record
-        const albumData: Partial<Album> = {
-          artist_id: artistId,
-          title: parsedData.title,
-          size: parsedData.size,
-          variant: parsedData.variant,
-          purchase_date: parsedData.purchaseDate,
-        }
+        // Process email content
+        const withParsedData = await parseEmailWithAI(state)
+        const withArtist = await findOrCreateArtist(withParsedData)
+        const finalState = await upsertAlbum(withArtist)
 
-        // Insert into database
-        const { error } = await supabase
-          .from('album')
-          .insert(albumData)
-
-        if (error) {
-          console.error(`Error inserting album ${parsedData.title}: `, error)
-        } else {
-          processedEmails.push({
-            from: email.headers.find(h => h.name === 'from')?.value,
-            subject: email.headers.find(h => h.name === 'subject')?.value,
-            parsed: parsedData
-          })
-          console.log(`Inserted album ${parsedData.title} for artist ${parsedData.artistName}`)
-        }
+        results.push(finalState)
       } catch (error) {
         console.error('Error processing email:', error)
       }
     }
 
-    return { 
-      success: true, 
-      processed: relevantEmails.length,
-      details: processedEmails
+    return {
+      success: true,
+      processed: results.length,
+      details: results
     }
   } catch (error) {
-    console.error('Error processing emails:', error)
+    console.error('Error in email processor:', error)
     return { success: false, error: error.message }
   }
 }
