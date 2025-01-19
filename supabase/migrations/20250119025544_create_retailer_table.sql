@@ -26,3 +26,27 @@ create trigger update_retailer_updated_at
   for each row
   execute function update_updated_at_column(); 
   
+-- Add info_approved column to album table
+alter table "album" add column info_approved boolean default false;
+
+-- Set existing records to approved
+update "album" set info_approved = true;
+
+-- Create receipt table
+create table "receipt" (
+  id uuid default gen_random_uuid() primary key,
+  album_id bigint references album(id) not null,
+  receipt text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add receipt_id to album table
+alter table "album" add column receipt_id uuid references receipt(id);
+
+-- Create trigger for receipt updated_at
+create trigger update_receipt_updated_at
+  before update on "receipt"
+  for each row
+  execute function update_updated_at_column();
+

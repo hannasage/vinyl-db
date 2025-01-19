@@ -36,39 +36,67 @@ const TEST_EMAILS: TestEmail[] = [
   {
     headers: [
       { name: "from", value: "orders@turntablelab.com" },
-      { name: "subject", value: "Your Vinyl Order Has Shipped!" },
+      { name: "subject", value: "Your Order Confirmation" },
     ],
     content: `
       Thank you for your order from Turntable Lab!
 
-      Your order has been shipped and is on its way:
-
       Order Details:
       - Artist: Taylor Swift
-      - Album: Red (Taylors Version)
-      - Format: 4xLP, 12" Vinyl, Red
+      - Album: Red (Taylor's Version)
+      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
       - Price: $45.99
       
       Order Date: 2024-03-15
+    `
+  },
+  {
+    headers: [
+      { name: "from", value: "orders@turntablelab.com" },
+      { name: "subject", value: "Your Vinyl Order Has Shipped!" },
+    ],
+    content: `
+      Your order has been shipped and is on its way:
+
+      Order Details:
+      - Artist: Taylor Swift  
+      - Album: Red (Taylor's Version)
+      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
+      
+      Ship Date: 2024-03-16
       Tracking Number: 9400123456789012345678
     `
   },
   {
     headers: [
-      { name: "from", value: "info@recordstore.com" },
-      { name: "subject", value: "Order Confirmation #12345" },
+      { name: "from", value: "orders@turntablelab.com" }, 
+      { name: "subject", value: "Your Order Has Been Delivered!" },
     ],
     content: `
-      Thanks for shopping with us!
+      Your order has been delivered!
 
-      We've received your order and will process it shortly.
+      Order Details:
+      - Artist: Taylor Swift
+      - Album: Red (Taylor's Version) 
+      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
       
-      Items:
-      1x T-Shirt - Band Logo (Size L)
-      1x CD - Greatest Hits
-      1x Vinyl Record - Lana Del Rey - Did You Know That There's A Tunnel Under Ocean Blvd (Transparent Green)
+      Delivery Date: 2024-03-18
+    `
+  },
+  {
+    headers: [
+      { name: "from", value: "vinyl@roughtraderecords.com" },
+      { name: "subject", value: "Order Confirmation" }, 
+    ],
+    content: `
+      Thanks for your order from Rough Trade!
       
-      Date: 2024-03-14
+      Order Details:
+      - Artist: Lana Del Rey
+      - Album: Did You Know That There's A Tunnel Under Ocean Blvd
+      - Format: 2xLP, 12" Vinyl, Transparent Green
+      
+      Order Date: 2024-03-14
     `
   },
   {
@@ -78,7 +106,6 @@ const TEST_EMAILS: TestEmail[] = [
     ],
     content: `
       Check out these new releases from artists you follow:
-
       - New singles from your favorite artists
       - Playlist updates
       - Concert announcements in your area
@@ -125,7 +152,13 @@ interface ProcessingState {
     size: number
     variant: string
     purchase_date: string
-    delivery_date?: string
+    acquired_date?: string
+    receipt_id?: string
+  }
+  receipt?: {
+    id: string
+    album_id: string
+    receipt: string
   }
 }
 
@@ -141,7 +174,7 @@ const EmailParseResultSchema = z.object({
   size: z.number().int().positive(),
   title: z.string().min(1),
   artistName: z.string().min(1),
-  purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   variant: z.string(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 })
@@ -436,7 +469,7 @@ async function upsertAlbum(state: ProcessingState): Promise<ProcessingState> {
       .select()
       .eq('artist_id', state.artist.id)
       .eq('title', state.parsedData.title)
-      .is('delivery_date', null)
+      .is('acquired_date', null)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -447,7 +480,7 @@ async function upsertAlbum(state: ProcessingState): Promise<ProcessingState> {
 
     const { error: updateError } = await supabase
       .from('album')
-      .update({ delivery_date: state.parsedData.deliveryDate })
+      .update({ acquired_date: state.parsedData.deliveryDate })
       .eq('id', albums[0].id)
 
     if (updateError) {
@@ -455,11 +488,50 @@ async function upsertAlbum(state: ProcessingState): Promise<ProcessingState> {
       return state
     }
 
-    state.album = { ...albums[0], delivery_date: state.parsedData.deliveryDate }
+    state.album = { ...albums[0], acquired_date: state.parsedData.deliveryDate }
     console.log(`Updated delivery date for album: ${albums[0].title}`)
   }
 
   return state
+}
+
+async function storeReceipt(state: ProcessingState): Promise<ProcessingState> {
+  if (!state.album?.id) { return state }
+
+  try {
+    // Insert receipt
+    const { data: receipt, error: insertError } = await supabase
+      .from('receipt')
+      .insert({
+        album_id: state.album.id,
+        receipt: state.emailData.content
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('Error storing receipt:', insertError)
+      return state
+    }
+
+    // Update album with receipt reference
+    const { error: updateError } = await supabase
+      .from('album')
+      .update({ receipt_id: receipt.id })
+      .eq('id', state.album.id)
+
+    if (updateError) {
+      console.error('Error updating album with receipt reference:', updateError)
+      return state
+    }
+
+    state.receipt = receipt
+    console.log(`Stored receipt for album: ${state.album.title}`)
+    return state
+  } catch (error) {
+    console.error('Error in receipt storage: ', error)
+    return state
+  }
 }
 
 async function processEmails() {
@@ -485,7 +557,10 @@ async function processEmails() {
         // Process email content
         const withParsedData = await parseEmailWithAI(state)
         const withArtist = await findOrCreateArtist(withParsedData)
-        const finalState = await upsertAlbum(withArtist)
+        const withAlbum = await upsertAlbum(withArtist)
+        const finalState = withAlbum.emailType === 'purchase' 
+          ? await storeReceipt(withAlbum) 
+          : withAlbum
 
         results.push(finalState)
       } catch (error) {
