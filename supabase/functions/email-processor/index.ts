@@ -4,24 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0"
 import OpenAI from "npm:openai@4.28.0"
 import { z } from "npm:zod@3.22.4"
 
-// Types for our database
-interface Artist {
-  id: string
-  name: string
-  // Add other relevant fields
-}
-
-interface Album {
-  id: string
-  artist_id: string
-  title: string
-  size: number
-  variant: string
-  purchase_date: string
-  created_at?: string
-  updated_at?: string
-}
-
 // Test data types to mock Gmail API responses
 interface TestEmail {
   headers: {
@@ -178,8 +160,6 @@ const EmailParseResultSchema = z.object({
   variant: z.string(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 })
-
-type EmailParseResult = z.infer<typeof EmailParseResultSchema>
 
 // Initialize OpenAI
 const openai = new OpenAI({
