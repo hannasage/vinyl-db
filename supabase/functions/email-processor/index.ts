@@ -168,7 +168,7 @@ async function isRelevantEmail(headers: { name: string; value: string }[]) {
 
   // First check if this is a known retailer
   if (await isKnownRetailer(email)) { 
-    console.log(`Found known retailer: ${name} <(${email})>`)
+    console.log(`Found known retailer: ${name} (${email})`)
     return true 
   }
 
