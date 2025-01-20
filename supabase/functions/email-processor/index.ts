@@ -1,101 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0"
-// import { gmail_v1, google } from "@googleapis/gmail"
+import { gmail_v1 } from "npm:@googleapis/gmail@9.0.0"
+import { gmail } from "npm:@googleapis/gmail@9.0.0"
+import { GoogleAuth } from "npm:google-auth-library@9.6.3"
 import OpenAI from "npm:openai@4.28.0"
 import { z } from "npm:zod@3.22.4"
-
-// Test data types to mock Gmail API responses
-interface TestEmail {
-  headers: {
-    name: string
-    value: string
-  }[]
-  content: string
-}
-
-// Test email data
-const TEST_EMAILS: TestEmail[] = [
-  {
-    headers: [
-      { name: "from", value: "orders@turntablelab.com" },
-      { name: "subject", value: "Your Order Confirmation" },
-    ],
-    content: `
-      Thank you for your order from Turntable Lab!
-
-      Order Details:
-      - Artist: Taylor Swift
-      - Album: Red (Taylor's Version)
-      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
-      - Price: $45.99
-      
-      Order Date: 2024-03-15
-    `
-  },
-  {
-    headers: [
-      { name: "from", value: "orders@turntablelab.com" },
-      { name: "subject", value: "Your Vinyl Order Has Shipped!" },
-    ],
-    content: `
-      Your order has been shipped and is on its way:
-
-      Order Details:
-      - Artist: Taylor Swift  
-      - Album: Red (Taylor's Version)
-      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
-      
-      Ship Date: 2024-03-16
-      Tracking Number: 9400123456789012345678
-    `
-  },
-  {
-    headers: [
-      { name: "from", value: "orders@turntablelab.com" }, 
-      { name: "subject", value: "Your Order Has Been Delivered!" },
-    ],
-    content: `
-      Your order has been delivered!
-
-      Order Details:
-      - Artist: Taylor Swift
-      - Album: Red (Taylor's Version) 
-      - Format: 4xLP, 12" Vinyl, Red Colored Vinyl
-      
-      Delivery Date: 2024-03-18
-    `
-  },
-  {
-    headers: [
-      { name: "from", value: "vinyl@roughtraderecords.com" },
-      { name: "subject", value: "Order Confirmation" }, 
-    ],
-    content: `
-      Thanks for your order from Rough Trade!
-      
-      Order Details:
-      - Artist: Lana Del Rey
-      - Album: Did You Know That There's A Tunnel Under Ocean Blvd
-      - Format: 2xLP, 12" Vinyl, Transparent Green
-      
-      Order Date: 2024-03-14
-    `
-  },
-  {
-    headers: [
-      { name: "from", value: "newsletter@spotify.com" },
-      { name: "subject", value: "New Releases for You" },
-    ],
-    content: `
-      Check out these new releases from artists you follow:
-      - New singles from your favorite artists
-      - Playlist updates
-      - Concert announcements in your area
-      
-      Open Spotify to listen now!
-    `
-  }
-]
 
 // Email processing types
 type EmailType = 'purchase' | 'shipping' | 'delivery' | 'unknown'
@@ -144,7 +53,7 @@ interface ProcessingState {
   }
 }
 
-// Update Zod schemas
+// Zod schemas
 const EmailRelevanceSchema = z.object({
   isRelevant: z.boolean(),
   confidence: z.number().min(0).max(1),
@@ -161,25 +70,88 @@ const EmailParseResultSchema = z.object({
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 })
 
-// Initialize OpenAI
+// Initialize clients
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
 })
 
-// Initialize Supabase
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
 
-// Comment out Gmail initialization
-/*
+// Initialize Gmail
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-const auth = new google.auth.GoogleAuth({
+const auth = new GoogleAuth({
   credentials: JSON.parse(Deno.env.get('GMAIL_CREDENTIALS') || '{}'),
   scopes: SCOPES,
+  subject: Deno.env.get('GMAIL_USER_EMAIL')
 })
-const gmail = google.gmail({ version: 'v1', auth })
-*/
+
+async function getRecentEmails(daysBack: number = 7): Promise<gmail_v1.Schema$Message[]> {
+  try {
+    const authClient = await auth.getClient()
+    
+    // Create Gmail client with proper version
+    const gmailClient = gmail({
+      version: 'v1',
+      auth: authClient
+    })
+    
+    const userEmail = Deno.env.get('GMAIL_USER_EMAIL')
+    if (!userEmail) {
+      throw new Error('GMAIL_USER_EMAIL environment variable not set')
+    }
+    
+    // List messages
+    const response = await gmailClient.users.messages.list({
+      userId: userEmail,
+      q: `newer_than:${daysBack}d`,
+      maxResults: 50 // Limit the number of emails to process
+    })
+
+    if (!response.data.messages) {
+      console.log('No messages found')
+      return []
+    }
+
+    // Get full message details
+    const fullMessages = await Promise.all(
+      response.data.messages.map(async (message) => {
+        const emailData = await gmailClient.users.messages.get({
+          userId: userEmail,
+          id: message.id!,
+        })
+        return emailData.data
+      })
+    )
+
+    return fullMessages
+  } catch (error) {
+    console.error('Error fetching emails:', error)
+    return []
+  }
+}
+
+async function extractEmailContent(message: gmail_v1.Schema$Message): Promise<string> {
+  const parts = message.payload?.parts || []
+  let content = ''
+
+  // First try to get content from parts
+  for (const part of parts) {
+    if (part.mimeType === 'text/plain') {
+      const body = part.body?.data || ''
+      content += atob(body.replace(/-/g, '+').replace(/_/g, '/'))
+    }
+  }
+
+  // If no parts with content, try the main body
+  if (!content && message.payload?.body?.data) {
+    content = atob(message.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))
+  }
+
+  return content
+}
 
 async function isKnownRetailer(state: ProcessingState): Promise<ProcessingState> {
   const { data: retailers, error } = await supabase
@@ -476,7 +448,7 @@ async function upsertAlbum(state: ProcessingState): Promise<ProcessingState> {
 }
 
 async function storeReceipt(state: ProcessingState): Promise<ProcessingState> {
-  if (!state.album?.id) { return state }
+  if (!state.album?.id || !state.retailer.id) { return state }
 
   try {
     // Insert receipt
@@ -484,6 +456,7 @@ async function storeReceipt(state: ProcessingState): Promise<ProcessingState> {
       .from('receipt')
       .insert({
         album_id: state.album.id,
+        retailer_id: state.retailer.id,
         receipt: state.emailData.content
       })
       .select()
@@ -518,15 +491,19 @@ async function processEmails() {
   try {
     const results: ProcessingState[] = []
 
+    // Get recent emails from Gmail
+    const emails = await getRecentEmails()
+    console.log(`Found ${emails.length} recent emails`)
+
     // Process each email
-    for (const email of TEST_EMAILS) {
+    for (const email of emails) {
       try {
         // Check relevance and initialize state
-        const state = await isRelevantEmail(email.headers)
+        const state = await isRelevantEmail(email.payload?.headers || [])
         if (!state) continue
 
-        // Add email content to state
-        state.emailData.content = email.content
+        // Extract and add email content to state
+        state.emailData.content = await extractEmailContent(email)
 
         // Skip shipping notifications for now
         if (state.emailType === 'shipping') {

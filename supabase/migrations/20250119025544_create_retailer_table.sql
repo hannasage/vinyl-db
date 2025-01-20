@@ -36,6 +36,7 @@ update "album" set info_approved = true;
 create table "receipt" (
   id uuid default gen_random_uuid() primary key,
   album_id bigint references album(id) not null,
+  retailer_id uuid references retailer(id) not null,
   receipt text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
