@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0"
 import { gmail_v1 } from "npm:@googleapis/gmail@9.0.0"
 import { gmail } from "npm:@googleapis/gmail@9.0.0"
-import { GoogleAuth } from "npm:google-auth-library@9.6.3"
+import { OAuth2Client } from "npm:google-auth-library@9.6.3"
 import OpenAI from "npm:openai@4.28.0"
 import { z } from "npm:zod@3.22.4"
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Email processing types
 type EmailType = 'purchase' | 'shipping' | 'delivery' | 'unknown'
@@ -80,34 +81,35 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-// Initialize Gmail
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-const auth = new GoogleAuth({
-  credentials: JSON.parse(Deno.env.get('GMAIL_CREDENTIALS') || '{}'),
-  scopes: SCOPES,
-  subject: Deno.env.get('GMAIL_USER_EMAIL')
-})
+// Initialize Gmail OAuth2 client
+const oauth2Client = new OAuth2Client(
+  Deno.env.get('GMAIL_CLIENT_ID'),
+  Deno.env.get('GMAIL_CLIENT_SECRET'),
+  Deno.env.get('GMAIL_REDIRECT_URI')
+);
+
+// Set credentials if we have them
+const tokens = Deno.env.get('GMAIL_REFRESH_TOKEN');
+if (tokens) {
+  oauth2Client.setCredentials({
+    refresh_token: tokens
+  });
+}
 
 async function getRecentEmails(daysBack: number = 7): Promise<gmail_v1.Schema$Message[]> {
   try {
-    const authClient = await auth.getClient()
+    console.log('Using OAuth2 authentication')
     
-    // Create Gmail client with proper version
     const gmailClient = gmail({
       version: 'v1',
-      auth: authClient
+      auth: oauth2Client
     })
-    
-    const userEmail = Deno.env.get('GMAIL_USER_EMAIL')
-    if (!userEmail) {
-      throw new Error('GMAIL_USER_EMAIL environment variable not set')
-    }
     
     // List messages
     const response = await gmailClient.users.messages.list({
-      userId: userEmail,
+      userId: 'me',
       q: `newer_than:${daysBack}d`,
-      maxResults: 50 // Limit the number of emails to process
+      maxResults: 50
     })
 
     if (!response.data.messages) {
@@ -119,7 +121,7 @@ async function getRecentEmails(daysBack: number = 7): Promise<gmail_v1.Schema$Me
     const fullMessages = await Promise.all(
       response.data.messages.map(async (message) => {
         const emailData = await gmailClient.users.messages.get({
-          userId: userEmail,
+          userId: 'me',
           id: message.id!,
         })
         return emailData.data
@@ -536,16 +538,90 @@ async function processEmails() {
   }
 }
 
-serve(async (_req) => {
+serve(async (req) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
+    const { code } = await req.json()
+
+    // If no code provided, return the auth URL
+    if (!code) {
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.readonly',
+      ];
+
+      const url = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent',
+        redirect_uri: Deno.env.get('GMAIL_REDIRECT_URI')
+      });
+
+      return new Response(
+        JSON.stringify({ url }),
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
+
+    // Process with provided code
+    const { tokens } = await oauth2Client.getToken(code)
+    oauth2Client.setCredentials(tokens)
+
+    // Store the refresh token securely
+    if (tokens.refresh_token) {
+      // TODO: Store the refresh token securely in your database
+      console.log('Received refresh token:', tokens.refresh_token)
+    }
+
+    // Process emails
     const result = await processEmails()
-    return new Response(JSON.stringify(result, null, 2), {
-      headers: { "Content-Type": "application/json" },
-    })
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to process emails')
+    }
+
+    // Transform the results into album format
+    const albums = (result.details || []).map(email => ({
+      id: email.album?.id,
+      artist_id: email.artist?.id,
+      title: email.parsedData?.title,
+      artist_name: email.parsedData?.artistName,
+      size: email.parsedData?.size,
+      variant: email.parsedData?.variant,
+      purchase_date: email.parsedData?.purchaseDate,
+      acquired_date: email.parsedData?.deliveryDate,
+      receipt_id: email.receipt?.id
+    })).filter(album => album.id && album.title)
+
+    return new Response(
+      JSON.stringify({ albums }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+    console.error('Error:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 500
+      }
+    )
   }
 })
