@@ -18,6 +18,7 @@ interface ProcessingState {
     senderName: string
     subject: string
     content: string
+    timestamp: string
   }
   retailer: {
     isKnown: boolean
@@ -64,10 +65,10 @@ const EmailRelevanceSchema = z.object({
 
 const EmailParseResultSchema = z.object({
   size: z.number().int().positive(),
-  title: z.string().min(1),
-  artistName: z.string().min(1),
+  title: z.string().min(1).nullable(),
+  artistName: z.string().min(1).nullable(),
   purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  variant: z.string(),
+  variant: z.string().nullable(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 })
 
@@ -105,11 +106,11 @@ async function getRecentEmails(daysBack: number = 7): Promise<gmail_v1.Schema$Me
       auth: oauth2Client
     })
     
-    // List messages
+    // List messages - reduced from default to just 3 most recent
     const response = await gmailClient.users.messages.list({
       userId: 'me',
       q: `newer_than:${daysBack}d`,
-      maxResults: 50
+      maxResults: 3  // Reduced from default to save on API calls
     })
 
     if (!response.data.messages) {
@@ -137,22 +138,51 @@ async function getRecentEmails(daysBack: number = 7): Promise<gmail_v1.Schema$Me
 
 async function extractEmailContent(message: gmail_v1.Schema$Message): Promise<string> {
   const parts = message.payload?.parts || []
-  let content = ''
+  let htmlContent = ''
+  let plainContent = ''
+
+  // Helper function to decode base64
+  const decodeBase64 = (data: string) => {
+    return atob(data.replace(/-/g, '+').replace(/_/g, '/'))
+  }
 
   // First try to get content from parts
-  for (const part of parts) {
-    if (part.mimeType === 'text/plain') {
-      const body = part.body?.data || ''
-      content += atob(body.replace(/-/g, '+').replace(/_/g, '/'))
+  if (parts.length > 0) {
+    // Get both HTML and plain text content if available
+    const htmlPart = parts.find(part => part.mimeType === 'text/html')
+    const plainPart = parts.find(part => part.mimeType === 'text/plain')
+
+    if (htmlPart?.body?.data) {
+      htmlContent = decodeBase64(htmlPart.body.data).substring(0, 4000) // Limit content length
+    }
+    if (plainPart?.body?.data) {
+      plainContent = decodeBase64(plainPart.body.data).substring(0, 2000) // Limit content length
     }
   }
 
   // If no parts with content, try the main body
-  if (!content && message.payload?.body?.data) {
-    content = atob(message.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))
+  if (!htmlContent && !plainContent && message.payload?.body?.data) {
+    const content = decodeBase64(message.payload.body.data).substring(0, 4000) // Limit content length
+    if (message.payload.mimeType === 'text/html') {
+      htmlContent = content
+    } else {
+      plainContent = content
+    }
   }
 
-  return content
+  // Combine both contents, with a clear separator if both exist
+  let finalContent = ''
+  if (htmlContent) finalContent += htmlContent
+  if (plainContent) {
+    if (htmlContent) finalContent += '\n\n--- Plain Text Content ---\n\n'
+    finalContent += plainContent
+  }
+
+  // Truncate final content if it's still too long
+  finalContent = finalContent.substring(0, 6000)
+  
+  console.log('Extracted email content length:', finalContent.length)
+  return finalContent
 }
 
 async function isKnownRetailer(state: ProcessingState): Promise<ProcessingState> {
@@ -199,125 +229,31 @@ async function addNewRetailer(state: ProcessingState): Promise<ProcessingState> 
   return state
 }
 
-async function isRelevantEmail(headers: { name: string; value: string }[]): Promise<ProcessingState | null> {
-  const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || ''
-  const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || ''
-  
-  // Extract email and name from From header
-  const emailMatch = from.match(/<([^>]+)>/) || from.match(/([^\s]+@[^\s]+)/)
-  if (!emailMatch) {
-    console.log(`Could not find sender email header: ${from}`)
-    return null
-  }
-  
-  const email = emailMatch[1].toLowerCase()
-  const name = from.split('<')[0].trim() || email.split('@')[0]
+async function isRelevantEmail(headers: gmail_v1.Schema$MessagePartHeader[]): Promise<ProcessingState | null> {
+  const from = headers.find(h => h.name === 'From')?.value || ''
+  const subject = headers.find(h => h.name === 'Subject')?.value || ''
+  const internalDate = headers.find(h => h.name === 'Date')?.value || new Date().toISOString()
 
-  // Initialize state
-  let state: ProcessingState = {
-    emailType: 'unknown',
-    emailData: {
-      from,
-      senderEmail: email,
-      senderName: name,
-      subject,
-      content: ''
-    },
-    retailer: {
-      isKnown: false,
-      name,
-      email
-    }
-  }
+  const name = from.match(/^"?([^"]*)"?\s*(?:<.*>)?$/)?.[1]?.trim() || ''
+  const email = from.match(/<(.+)>/)?.[1]?.toLowerCase() || from.toLowerCase()
 
-  // Check known retailers first
-  state = await isKnownRetailer(state)
-  if (state.retailer.isKnown) {
-    // Simple pattern matching for known retailers
-    if (subject.toLowerCase().includes('delivered') || subject.toLowerCase().includes('delivery')) {
-      state.emailType = 'delivery'
-      return state
-    }
-    if (subject.toLowerCase().includes('shipped') || subject.toLowerCase().includes('shipping')) {
-      state.emailType = 'shipping'
-      return state
-    }
-    if (subject.toLowerCase().includes('order') || subject.toLowerCase().includes('purchase')) {
-      state.emailType = 'purchase'
-      return state
-    }
-  }
-
-  // For unknown senders, use GPT
   const prompt = `
-    Analyze this email sender and subject to determine if it's about a vinyl record:
-    
+    Analyze for vinyl/music purchase:
     From: ${from}
     Subject: ${subject}
 
-    Return a JSON object with:
-    - isRelevant: boolean indicating if this is about vinyl records
-    - confidence: number between 0-1 indicating confidence level
-    - reasoning: brief explanation of the decision
-    - emailType: one of ['purchase', 'shipping', 'delivery', 'unknown'] based on the subject
-  `
+    Is this a potential music/vinyl purchase email?
+    Consider:
+    - Vinyl/music retailers
+    - Order confirmations
+    - Music-related senders
+    - Artist/label names
 
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        {
-          role: "system",
-          content: "You are a precise assistant that analyzes email metadata to detect vinyl record related emails."
-        },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    })
-
-    const result = EmailRelevanceSchema.parse(
-      JSON.parse(completion.choices[0].message.content)
-    )
-
-    console.log({
-      timestamp: new Date().toISOString(),
-      from,
-      subject,
-      analysis: result
-    })
-
-    if (result.isRelevant && result.confidence >= 0.8) {
-      state = await addNewRetailer(state)
-    }
-
-    if (result.isRelevant && result.confidence > 0.7) {
-      state.emailType = result.emailType
-      return state
-    }
-  } catch (error) {
-    console.error('Error analyzing email relevance:', error)
-  }
-
-  return null
-}
-
-async function parseEmailWithAI(state: ProcessingState): Promise<ProcessingState> {
-  if (state.emailType === 'shipping') {
-    return state // Skip processing shipping notifications for now
-  }
-
-  const prompt = `
-    Extract the following information from this email about a vinyl record:
-    - Record size (as a whole number without inches notation)
-    - Title of the album
-    - Artist name
-    - ${state.emailType === 'delivery' ? 'Delivery' : 'Purchase'} date (in YYYY-MM-DD format)
-    - Pressing/color variant (including descriptions like splatter, color-in-color, split)
-    
-    Format the response as a JSON object with these exact keys: size, title, artistName, ${state.emailType === 'delivery' ? 'deliveryDate' : 'purchaseDate'}, variant
-    
-    Email content:
-    ${state.emailData.content}
+    Format as JSON:
+    - isRelevant (boolean)
+    - confidence (number 0-1)
+    - reasoning (string)
+    - emailType ("purchase"/"shipping"/"delivery"/"unknown")
   `
 
   try {
@@ -326,16 +262,146 @@ async function parseEmailWithAI(state: ProcessingState): Promise<ProcessingState
       messages: [
         { 
           role: "system", 
-          content: "You are a precise assistant that extracts vinyl record information from emails." 
+          content: "You identify potential music/vinyl purchase emails. Err on inclusion." 
         },
         { role: "user", content: prompt }
       ],
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
+      max_tokens: 150  // Limit token usage
     })
 
-    const result = EmailParseResultSchema.parse(
+    const result = EmailRelevanceSchema.parse(
       JSON.parse(completion.choices[0].message.content)
     )
+
+    if (!result.isRelevant) {
+      return null
+    }
+
+    return {
+      emailType: result.emailType,
+      emailData: {
+        from,
+        senderEmail: email,
+        senderName: name,
+        subject,
+        content: '',
+        timestamp: internalDate
+      },
+      retailer: {
+        isKnown: false,
+        name: name || email,
+        email
+      }
+    }
+  } catch (error) {
+    console.error('Error checking email relevance:', error)
+    return null
+  }
+}
+
+async function parseEmailWithAI(state: ProcessingState): Promise<ProcessingState> {
+  if (state.emailType === 'shipping') {
+    return state // Skip processing shipping notifications for now
+  }
+
+  // First, check if this is specifically a vinyl record purchase
+  const vinylCheckPrompt = `
+    Check if this is a vinyl record purchase:
+    From: ${state.emailData.from}
+    Subject: ${state.emailData.subject}
+    Content: ${state.emailData.content}
+
+    Look for:
+    - "vinyl", "LP", "record", "12\"", "7\"", "33 RPM", "45 RPM"
+    - Physical record descriptions
+    - Vinyl format specs
+    
+    JSON response:
+    - isVinyl: boolean (true only if clearly vinyl)
+    - confidence: number (0-1)
+    - reasoning: string (brief)
+  `
+
+  try {
+    console.log('Checking if purchase is specifically vinyl...')
+    const vinylCheck = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { 
+          role: "system", 
+          content: "You strictly identify vinyl record purchases. Only confirm if clear evidence exists." 
+        },
+        { role: "user", content: vinylCheckPrompt }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 150
+    })
+    
+    const vinylResult = JSON.parse(vinylCheck.choices[0].message.content)
+    console.log('Vinyl check result:', vinylResult)
+
+    if (!vinylResult.isVinyl) {
+      console.log('Not a vinyl purchase, skipping further processing')
+      return state
+    }
+
+    // Continue with regular parsing if it is a vinyl purchase
+    const prompt = `
+    Extract vinyl record info from email:
+    From: ${state.emailData.from}
+    Subject: ${state.emailData.subject}
+    Content: ${state.emailData.content}
+
+    Extract:
+    - Record size (number)
+      * Single/7" = 7
+      * LP/12" = 12
+      * Default = 12
+    - Album title (null if uncertain)
+    - Artist name (null if uncertain)
+    - Variant/color (null if unspecified)
+    
+    Return JSON: {
+      size: number,
+      title: string | null,
+      artistName: string | null,
+      variant: string | null
+    }
+  `
+
+    console.log('Parsing vinyl purchase details...')
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { 
+          role: "system", 
+          content: "You extract vinyl record details from emails. Return null for uncertain fields." 
+        },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 250
+    })
+    
+    console.log('Completion: ', completion.choices[0].message.content)
+    
+    // Parse the completion and apply transformations
+    const rawResult = JSON.parse(completion.choices[0].message.content)
+    
+    // Transform size to number and apply defaults
+    const transformedResult = {
+      ...rawResult,
+      size: typeof rawResult.size === 'string' ? parseInt(rawResult.size, 10) : (rawResult.size || 12),
+      // Keep null values if they were returned
+      title: rawResult.title || null,
+      artistName: rawResult.artistName || null,
+      variant: rawResult.variant || null,
+      // Add the date from the email timestamp
+      [state.emailType === 'delivery' ? 'deliveryDate' : 'purchaseDate']: new Date(state.emailData.timestamp).toISOString().split('T')[0]
+    }
+    
+    const result = EmailParseResultSchema.parse(transformedResult)
 
     state.parsedData = result
     console.log({
@@ -491,21 +557,33 @@ async function storeReceipt(state: ProcessingState): Promise<ProcessingState> {
 
 async function processEmails() {
   try {
+    console.log('=== Starting Email Processing ===')
     const results: ProcessingState[] = []
 
     // Get recent emails from Gmail
+    console.log('Fetching recent emails...')
     const emails = await getRecentEmails()
     console.log(`Found ${emails.length} recent emails`)
 
     // Process each email
     for (const email of emails) {
       try {
+        console.log('\n--- Processing Email ---')
+        console.log('Subject:', email.payload?.headers?.find(h => h.name === 'Subject')?.value)
+        
         // Check relevance and initialize state
+        console.log('Checking email relevance...')
         const state = await isRelevantEmail(email.payload?.headers || [])
-        if (!state) continue
+        if (!state) {
+          console.log('Email not relevant, skipping')
+          continue
+        }
+        console.log('Email is relevant:', { type: state.emailType })
 
         // Extract and add email content to state
+        console.log('Extracting email content...')
         state.emailData.content = await extractEmailContent(email)
+        console.log('Content extracted, length:', state.emailData.content.length)
 
         // Skip shipping notifications for now
         if (state.emailType === 'shipping') {
@@ -514,18 +592,71 @@ async function processEmails() {
         }
 
         // Process email content
+        console.log('Parsing email with AI...')
         const withParsedData = await parseEmailWithAI(state)
+        
+        // Skip if not a vinyl record or if parsing failed
+        if (!withParsedData.parsedData) {
+          console.log('Not a vinyl record or parsing failed, skipping')
+          continue
+        }
+        
+        console.log('AI parsing complete:', withParsedData.parsedData)
+        
+        console.log('Finding or creating artist...')
         const withArtist = await findOrCreateArtist(withParsedData)
+        
+        // Skip if artist couldn't be determined
+        if (!withArtist.artist) {
+          console.log('Artist could not be determined, skipping')
+          continue
+        }
+        
+        console.log('Artist processed:', { 
+          id: withArtist.artist?.id, 
+          name: withArtist.artist?.name 
+        })
+        
+        console.log('Upserting album...')
         const withAlbum = await upsertAlbum(withArtist)
+        
+        // Skip if album couldn't be created
+        if (!withAlbum.album) {
+          console.log('Album could not be created, skipping')
+          continue
+        }
+        
+        console.log('Album processed:', { 
+          id: withAlbum.album?.id, 
+          title: withAlbum.album?.title 
+        })
+
         const finalState = withAlbum.emailType === 'purchase' 
           ? await storeReceipt(withAlbum) 
           : withAlbum
 
-        results.push(finalState)
+        // Only add to results if we have all required data
+        if (finalState.album && finalState.artist && finalState.parsedData) {
+          results.push(finalState)
+          console.log('Email processing complete and added to results')
+        }
       } catch (error) {
-        console.error('Error processing email:', error)
+        console.error('Error processing email:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          subject: email.payload?.headers?.find(h => h.name === 'Subject')?.value
+        })
       }
     }
+
+    console.log('\n=== Email Processing Summary ===')
+    console.log('Total vinyl records found:', results.length)
+    console.log('Processed vinyl records:', results.map(r => ({
+      type: r.emailType,
+      album: r.album?.title,
+      artist: r.artist?.name
+    })))
 
     return {
       success: true,
@@ -533,22 +664,31 @@ async function processEmails() {
       details: results
     }
   } catch (error) {
-    console.error('Error in email processor:', error)
+    console.error('Error in email processor:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
     return { success: false, error: error.message }
   }
 }
 
 serve(async (req) => {
+  console.log('=== Starting Email Processor ===')
+  
   // Handle CORS
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request')
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const { code } = await req.json()
+    console.log('Request received:', code ? 'With auth code' : 'No auth code')
 
     // If no code provided, return the auth URL
     if (!code) {
+      console.log('No auth code provided, generating auth URL')
       const scopes = [
         'https://www.googleapis.com/auth/gmail.readonly',
       ];
@@ -560,6 +700,7 @@ serve(async (req) => {
         redirect_uri: Deno.env.get('GMAIL_REDIRECT_URI')
       });
 
+      console.log('Generated auth URL:', url)
       return new Response(
         JSON.stringify({ url }),
         { 
@@ -571,24 +712,37 @@ serve(async (req) => {
       )
     }
 
-    // Process with provided code
+    console.log('Getting tokens from auth code...')
     const { tokens } = await oauth2Client.getToken(code)
+    console.log('Tokens received:', {
+      access_token: tokens.access_token ? 'Present' : 'Missing',
+      refresh_token: tokens.refresh_token ? 'Present' : 'Missing',
+      expiry_date: tokens.expiry_date
+    })
+    
     oauth2Client.setCredentials(tokens)
+    console.log('Credentials set on OAuth2 client')
 
     // Store the refresh token securely
     if (tokens.refresh_token) {
-      // TODO: Store the refresh token securely in your database
-      console.log('Received refresh token:', tokens.refresh_token)
+      console.log('New refresh token received - should be stored securely')
     }
 
     // Process emails
+    console.log('Starting email processing...')
     const result = await processEmails()
+    console.log('Email processing complete:', {
+      success: result.success,
+      processed: result.details?.length || 0,
+      error: result.error || null
+    })
     
     if (!result.success) {
       throw new Error(result.error || 'Failed to process emails')
     }
 
     // Transform the results into album format
+    console.log('Transforming results into album format...')
     const albums = (result.details || []).map(email => ({
       id: email.album?.id,
       artist_id: email.artist?.id,
@@ -601,6 +755,7 @@ serve(async (req) => {
       receipt_id: email.receipt?.id
     })).filter(album => album.id && album.title)
 
+    console.log('Processing complete. Found albums:', albums.length)
     return new Response(
       JSON.stringify({ albums }),
       { 
@@ -612,9 +767,17 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Error in email processor:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        type: error.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }),
       { 
         headers: { 
           ...corsHeaders,
