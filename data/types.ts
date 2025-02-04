@@ -34,3 +34,43 @@ export interface Collection extends SupabaseDbEntry {
   shortDescription: string;
   title: string;
 }
+
+export interface AlbumDraft {
+  id: string;  // uuid
+  created_at: string;
+  updated_at: string;
+  title: string | null;
+  artist_id: number | null;
+  variant: string | null;
+  size: number;
+  purchase_date: string | null;
+  acquired_date: string | null;
+  preordered: boolean;
+  artwork_url: string | null;
+  release_year: number | null;
+  receipt_id: string | null;  // uuid
+  info_approved: boolean;
+  is_approved: boolean;
+  reviewed_at: string | null;
+  original_extraction: {
+    title?: string;
+    artist_name?: string;
+    variant?: string;
+    size?: number;
+    purchase_date?: string;
+    acquired_date?: string;
+    [key: string]: any;
+  } | null;
+  review_changes: {
+    field: string;
+    old_value: any;
+    new_value: any;
+    changed_at: string;
+    changed_by: string;
+  }[] | null;
+}
+
+export type FullAlbumDraft = AlbumDraft & {
+  artist_name?: string;
+  retailer_name?: string;
+};
