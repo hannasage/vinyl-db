@@ -96,11 +96,6 @@ async function classifyEmail(subject: string, senderName: string, senderEmail: s
       hasReceiptKeywords,
       hasShippingKeywords
     });
-    
-    // Prepare input text with cleaned content
-    const inputText = `From: ${senderName} <${senderEmail}>
-Subject: ${cleanedSubject}
-Preview: ${cleanedBody}`;
 
     // Early return cases based on keywords
     if (hasShippingKeywords) {
@@ -132,6 +127,11 @@ Preview: ${cleanedBody}`;
 
     let receiptScore = 0;
     let isReceipt = false;
+    
+    // Prepare input text with cleaned content
+    const inputText = `From: ${senderName} <${senderEmail}>
+Subject: ${cleanedSubject}
+Preview: ${cleanedBody}`;
 
     // If we have receipt keywords but no vinyl keywords, or no keywords at all,
     // check if it's a receipt first
