@@ -36,72 +36,230 @@ function parseSender(from: string): { name: string; email: string } {
 }
 
 /**
+ * Clean text by removing HTML, escape characters, and normalizing whitespace
+ */
+function cleanText(text: string): string {
+  return text
+    // First clean HTML if present
+    .replace(/<style[^>]*>.*?<\/style>/gs, '') // Remove style tags and content
+    .replace(/<script[^>]*>.*?<\/script>/gs, '') // Remove script tags and content
+    .replace(/<[^>]+>/g, ' ') // Replace other HTML tags with space
+    // Then clean escaped characters and entities
+    .replace(/\\r\\n|\\n|\\r/g, ' ') // Replace escaped newlines with space
+    .replace(/\\t/g, ' ') // Replace escaped tabs
+    .replace(/&[#\w\d]+;/g, ' ') // Replace all HTML entities including numeric ones
+    .replace(/[^\x20-\x7E]/g, ' ') // Replace non-printable chars with space
+    .replace(/[Ãâ€]/g, '') // Remove common encoding artifacts
+    // Finally normalize whitespace
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Check if text contains any of the keywords
+ */
+function containsKeywords(text: string, keywords: string[]): boolean {
+  const lowercaseText = text.toLowerCase();
+  return keywords.some(keyword => lowercaseText.includes(keyword.toLowerCase()));
+}
+
+/**
  * Calls Hugging Face API to classify if an email is a vinyl receipt
  */
-async function classifyEmail(subject: string, senderName: string, senderEmail: string): Promise<EmailData['classification']> {
+async function classifyEmail(subject: string, senderName: string, senderEmail: string, cleanedBody: string): Promise<EmailData['classification']> {
   try {
-    // Call Hugging Face API for classification
-    const hf = new HfInference(Deno.env.get('HUGGINGFACE_API_KEY'));
+    // Clean and prepare input text
+    const cleanedSubject = cleanText(subject);
     
-    // Prepare input text focusing on sender and subject
-    const inputText = `From: ${senderName} <${senderEmail}>\nSubject: ${subject}`.substring(0, 500);
-    
-    // Define our classification labels
-    const labels = [
-      'vinyl record purchase receipt',
-      'vinyl record shipping notification',
-      'vinyl record delivery confirmation',
-      'musician and band merchandise store',
-      'music equipment',
-      'unrelated'
-    ];
-
-    // Make the API call
-    console.log(`Classifying email from: ${senderName} (${senderEmail})`);
-    const result = await hf.zeroShotClassification({
-      model: 'facebook/bart-large-mnli',
-      inputs: inputText,
-      parameters: { candidate_labels: labels }
+    console.log('Starting classification for:', {
+      subject: cleanedSubject,
+      sender: senderEmail
     });
+    
+    // Look for vinyl-specific keywords in the text
+    const vinylKeywords = ['vinyl', 'LP', 'EP', '12"', '7"', '10"', '45rpm', '33rpm'];
+    const hasVinylKeywords = containsKeywords(cleanedSubject, vinylKeywords) || 
+                            containsKeywords(cleanedBody, vinylKeywords);
 
-    // Validate response structure
-    if (!result || !Array.isArray(result)) {
-      console.error('Unexpected API response structure:', result);
-      throw new Error('Invalid API response structure');
-    }
+    // Look for receipt/order keywords in subject
+    const receiptKeywords = ['order', 'confirmed', 'confirmation', 'receipt', 'purchase', 'transaction'];
+    const hasReceiptKeywords = containsKeywords(cleanedSubject, receiptKeywords);
 
-    // Get the first (and should be only) result
-    const classification = result[0];
-    if (!classification || !classification.scores || !classification.labels) {
-      console.error('Missing classification data:', classification);
-      throw new Error('Missing classification data in response');
-    }
-
-    // Find the highest scoring label
-    const maxScore = Math.max(...classification.scores);
-    const maxIndex = classification.scores.indexOf(maxScore);
-    const topLabel = classification.labels[maxIndex];
-
-    // Determine if it's a receipt based on the classification
-    const isReceipt = topLabel.includes('vinyl') || topLabel.includes('musician')
-
-    // Generate explanation based on classification
-    let explanation = isReceipt
-      ? `High relevance (${(maxScore * 100).toFixed(1)}%): ${topLabel}`
-      : `Low relevance (${(maxScore * 100).toFixed(1)}%): Likely ${topLabel}`;
-
-    console.log('Classification result:', {
+    // Look for shipping keywords that indicate it's not a receipt
+    const shippingKeywords = ['shipped', 'shipping', 'delivered', 'delivery', 'tracking'];
+    const hasShippingKeywords = containsKeywords(cleanedSubject, shippingKeywords);
+    
+    console.log('Keyword detection results:', {
       sender: senderEmail,
-      topLabel,
-      score: maxScore,
+      subject: cleanedSubject,
+      hasVinylKeywords,
+      hasReceiptKeywords,
+      hasShippingKeywords
+    });
+    
+    // Prepare input text with cleaned content
+    const inputText = `From: ${senderName} <${senderEmail}>
+Subject: ${cleanedSubject}
+Preview: ${cleanedBody}`;
+
+    // Early return cases based on keywords
+    if (hasShippingKeywords) {
+      console.log('Early return: Shipping notification detected', {
+        sender: senderEmail,
+        subject: cleanedSubject
+      });
+      return {
+        isReceipt: false,
+        score: 1,
+        explanation: 'Shipping notification detected from keywords'
+      };
+    }
+
+    if (hasReceiptKeywords && hasVinylKeywords && !hasShippingKeywords) {
+      console.log('Early return: Clear vinyl receipt detected', {
+        sender: senderEmail,
+        subject: cleanedSubject
+      });
+      return {
+        isReceipt: true,
+        score: 1,
+        explanation: 'Vinyl purchase receipt detected from keywords'
+      };
+    }
+
+    // Initialize Hugging Face client only if needed
+    const hf = new HfInference(Deno.env.get('HUGGINGFACE_API_KEY'));
+
+    let receiptScore = 0;
+    let isReceipt = false;
+
+    // If we have receipt keywords but no vinyl keywords, or no keywords at all,
+    // check if it's a receipt first
+    if (!hasVinylKeywords || !hasReceiptKeywords) {
+      console.log('Running receipt classification model', {
+        sender: senderEmail,
+        subject: cleanedSubject,
+        reason: !hasVinylKeywords ? 'No vinyl keywords' : 'No receipt keywords'
+      });
+
+      const receiptResult = await hf.zeroShotClassification({
+        model: 'facebook/bart-large-mnli',
+        inputs: inputText,
+        parameters: {
+          candidate_labels: [
+            'order confirmation email',
+            'purchase receipt',
+            'shipping notification',
+            'other email'
+          ]
+        }
+      });
+
+      if (!Array.isArray(receiptResult) || !receiptResult[0]?.scores || !receiptResult[0]?.labels) {
+        throw new Error('Invalid receipt classification response');
+      }
+
+      receiptScore = Math.max(
+        ...receiptResult[0].scores.filter((_, i) => 
+          receiptResult[0].labels[i].includes('receipt') || 
+          receiptResult[0].labels[i].includes('order confirmation')
+        )
+      );
+
+      // Boost receipt score if we have receipt keywords
+      if (hasReceiptKeywords) {
+        console.log('Boosting receipt score due to keywords', {
+          sender: senderEmail,
+          subject: cleanedSubject,
+          originalScore: receiptScore,
+          boostedScore: Math.max(receiptScore, 0.7)
+        });
+        receiptScore = Math.max(receiptScore, 0.7);
+      }
+
+      isReceipt = receiptScore > 0.5;
+
+      // If it's not a receipt and we don't have vinyl keywords, return early
+      if (!isReceipt && !hasVinylKeywords) {
+        console.log('Early return: Not a receipt', {
+          sender: senderEmail,
+          subject: cleanedSubject,
+          receiptScore
+        });
+        return {
+          isReceipt: false,
+          score: receiptScore,
+          explanation: `Not a purchase receipt (${(receiptScore * 100).toFixed(1)}% confidence)`
+        };
+      }
+    }
+
+    // Skip music classification if we already have vinyl keywords
+    if (hasVinylKeywords) {
+      console.log('Skipping music classification due to vinyl keywords', {
+        sender: senderEmail,
+        subject: cleanedSubject,
+        isReceipt,
+        hasReceiptKeywords
+      });
+      return {
+        isReceipt: isReceipt || hasReceiptKeywords,
+        score: 0.8,
+        explanation: `Vinyl purchase detected from keywords${hasReceiptKeywords ? ' with order confirmation' : ''}`
+      };
+    }
+
+    console.log('Running music classification model', {
+      sender: senderEmail,
+      subject: cleanedSubject,
+      receiptScore,
       isReceipt
     });
 
+    // Check if it's music-related
+    const musicResult = await hf.zeroShotClassification({
+      model: 'facebook/bart-large-mnli',
+      inputs: inputText,
+      parameters: {
+        candidate_labels: [
+          'vinyl record or LP purchase',
+          'music album or CD purchase',
+          'other product purchase'
+        ]
+      }
+    });
+
+    if (!Array.isArray(musicResult) || !musicResult[0]?.scores || !musicResult[0]?.labels) {
+      throw new Error('Invalid music classification response');
+    }
+
+    const topMusicLabel = musicResult[0].labels[0];
+    const topMusicScore = musicResult[0].scores[0];
+    
+    const isMusicRelated = topMusicLabel.includes('vinyl') || 
+                          topMusicLabel.includes('music');
+
+    console.log('Final classification result:', {
+      sender: senderEmail,
+      subject: cleanedSubject,
+      hasReceiptKeywords,
+      hasVinylKeywords,
+      hasShippingKeywords,
+      receiptScore,
+      musicScore: topMusicScore,
+      musicLabel: topMusicLabel,
+      isMusicRelated,
+      finalDecision: isMusicRelated && (isReceipt || hasReceiptKeywords)
+    });
+
     return {
-      isReceipt,
-      score: maxScore,
-      explanation
+      isReceipt: isMusicRelated && (isReceipt || hasReceiptKeywords),
+      score: topMusicScore,
+      explanation: isMusicRelated
+        ? `Music purchase receipt (${(topMusicScore * 100).toFixed(1)}% confidence): ${topMusicLabel}`
+        : `Non-music receipt (${(topMusicScore * 100).toFixed(1)}% confidence)`
     };
+
   } catch (error) {
     console.error('Classification error:', {
       error,
@@ -164,7 +322,7 @@ serve(async (req) => {
     console.log('Fetching recent emails')
     const response = await gmailClient.users.messages.list({
       userId: 'me',
-      maxResults: 7
+      maxResults: 15
     })
 
     if (!response.data.messages) {
@@ -195,26 +353,32 @@ serve(async (req) => {
           const { name: senderName, email: senderEmail } = parseSender(from)
 
           // Extract body
-          let body = ''
+          let body = '';
           if (fullMessage.data.payload?.parts) {
             // Handle multipart message
             for (const part of fullMessage.data.payload.parts) {
+              // Try to get plain text first
               if (part.mimeType === 'text/plain' && part.body?.data) {
-                body = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))
-                break
+                body = cleanText(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')));
+                break;
+              }
+              // If no plain text, try HTML
+              if (part.mimeType === 'text/html' && part.body?.data) {
+                body = cleanText(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')));
+                break;
               }
             }
           } else if (fullMessage.data.payload?.body?.data) {
             // Handle single part message
-            body = atob(fullMessage.data.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))
+            body = cleanText(atob(fullMessage.data.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')));
           }
 
-          // Truncate body to reasonable length
-          const truncatedBody = body.substring(0, 4000)
+          // Truncate body to reasonable length and ensure it's not empty
+          const truncatedBody = body.substring(0, 1000) || '[No readable content]';
 
           // Classify the email
           console.log(`Classifying email: ${subject}`)
-          const classification = await classifyEmail(subject, senderName, senderEmail)
+          const classification = await classifyEmail(subject, senderName, senderEmail, truncatedBody)
 
           return {
             id: message.id!,
