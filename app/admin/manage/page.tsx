@@ -29,7 +29,7 @@ const EmailProcessor = () => {
     setError(null);
     
     try {
-      const { data, error: processError } = await supabase.functions.invoke('email-processor', {
+      const { data, error: processError } = await supabase.functions.invoke('gmail-fetch', {
         body: { code }
       });
 
