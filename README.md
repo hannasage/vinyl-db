@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Vinyl DB
+
+A Next.js application for managing vinyl records, built with Supabase and TypeScript.
+
+### Prerequisites
+
+- Node.js (Latest LTS version recommended)
+- PostgreSQL 15
+- Supabase CLI
+- Yarn package manager
+
+
+
+### Tech Stack
+- Next.js 14
+- TypeScript
+- Supabase (Auth, Database)
+- Tailwind CSS
+- ESLint + Prettier
+
+
+### Dev Docs & More
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)    
 
 ## Getting Started
 
-First, run the development server:
-
+1. Install dependencies:
 ```bash
-npm run dev
-# or
+yarn install
+```
+
+2. Set up Supabase locally:
+```bash
+# Install Supabase CLI if you haven't already
+brew install supabase/tap/supabase
+
+# Link to your Supabase project
+supabase link --project-ref <project-id>
+
+# Start the local Supabase instance
+supabase start
+
+# Pull seed data from your remote database
+supabase db dump --data-only -f supabase/seed.sql
+
+# Apply seed data to local database
+supabase db reset
+
+```
+
+3. Set up your environment variables:
+Create a `.env.local` file in the root directory with the following variables:
+```env
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+4. Run the development server:
+```bash
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+### Code Quality
+- Format code: `yarn format`
+- Lint code: `yarn lint`
 
-## Learn More
+### Database Management
 
-To learn more about Next.js, take a look at the following resources:
+#### Migrations
+To create a new migration:
+```bash
+supabase migration new your_migration_name
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+To apply migrations:
+```bash
+supabase db reset
+```
