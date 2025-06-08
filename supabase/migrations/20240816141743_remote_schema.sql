@@ -13,5 +13,7 @@ for select
 to public
 using (true);
 
+CREATE POLICY "Enable insert for authenticated users" ON "public"."artist" FOR INSERT TO authenticated WITH CHECK (true);
+
 
 

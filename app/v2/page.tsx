@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { sortLegacyEntries } from '@/data/filters';
 import { FullAlbumDetails } from '@/data/types';
 import AddAlbumClientWrapper from '@/components/AddAlbumClientWrapper';
+import AddArtistButton from '@/components/AddArtistButton';
 
 export interface AlbumListRes {
   list: Array<FullAlbumDetails>;
@@ -26,5 +27,9 @@ export default async function V2Page() {
 
   const sortedAlbums = sortLegacyEntries(data.list, "artist-alphabetical");
 
-  return <AddAlbumClientWrapper albums={sortedAlbums} />;
+  return (
+    <>
+      <AddAlbumClientWrapper albums={sortedAlbums} />
+    </>
+  );
 }

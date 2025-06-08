@@ -6,6 +6,7 @@ import AddAlbumPanel from './AddAlbumPanel';
 import ContentGrid from './ContentGrid';
 import { FullAlbumDetails } from '@/data/types';
 import { FilterSortBar } from '@/components/FilterSortBar';
+import AddArtistButton from './AddArtistButton';
 
 interface AddAlbumClientWrapperProps {
   albums: FullAlbumDetails[];
@@ -28,7 +29,10 @@ export default function AddAlbumClientWrapper({ albums: initialAlbums }: AddAlbu
             {albums.length} albums in your collection
           </p>
         </div>
-        <AddAlbumButton onClick={() => setIsPanelOpen(true)} />
+        <div className="flex space-x-2">
+          <AddArtistButton />
+          <AddAlbumButton onClick={() => setIsPanelOpen(true)} />
+        </div>
       </div>
 
       <FilterSortBar />
