@@ -16,11 +16,6 @@ serve(async (req) => {
     // Get OpenAI API key from environment
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
     
-    // Debug: Log environment variable status (without exposing sensitive data)
-    console.log('OPENAI_API_KEY exists:', !!openaiApiKey)
-    console.log('OPENAI_API_KEY length:', openaiApiKey?.length || 0)
-    console.log('OPENAI_API_KEY starts with sk-:', openaiApiKey?.startsWith('sk-') || false)
-    
     if (!openaiApiKey) {
       throw new Error('OPENAI_API_KEY environment variable is not set')
     }
