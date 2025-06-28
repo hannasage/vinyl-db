@@ -44,9 +44,33 @@ export interface ChatMessage {
   type: 'text' | 'image';
   imageUrl?: string;
   imageFile?: File;
+  albumPreview?: AlbumPreviewData;
 }
 
 export interface ChatResponse {
   message: string;
   timestamp: string;
+}
+
+// Album Recognition Types
+export interface AlbumRecognitionResult {
+  title?: string;
+  artist?: string;
+  year?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  error?: string;
+  partialData?: any;
+  rawContent?: string;
+  parseError?: string;
+}
+
+export interface AlbumPreviewData {
+  id: string;
+  title: string;
+  artist: string;
+  year: string;
+  confidence: 'high' | 'medium' | 'low';
+  imageUrl: string;
+  isConfirmed: boolean;
+  isRejected: boolean;
 }

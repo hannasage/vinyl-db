@@ -1,4 +1,6 @@
 import React from 'react';
+import AlbumPreview from './AlbumPreview';
+import { AlbumPreviewData } from '../data/types';
 
 export interface ChatMessageProps {
   id: string;
@@ -7,6 +9,9 @@ export interface ChatMessageProps {
   timestamp: Date;
   type: 'text' | 'image';
   imageUrl?: string;
+  albumPreview?: AlbumPreviewData;
+  onAlbumConfirm?: (albumId: string) => void;
+  onAlbumReject?: (albumId: string) => void;
   className?: string;
 }
 
@@ -16,6 +21,9 @@ export default function ChatMessage({
   timestamp, 
   type,
   imageUrl,
+  albumPreview,
+  onAlbumConfirm,
+  onAlbumReject,
   className = '' 
 }: ChatMessageProps) {
   const isUser = sender === 'user';
@@ -38,6 +46,18 @@ export default function ChatMessage({
               src={imageUrl}
               alt="Uploaded content"
               className="w-full h-32 object-cover rounded-lg"
+            />
+          </div>
+        )}
+        
+        {/* Album Preview */}
+        {albumPreview && (
+          <div className="mb-2">
+            <AlbumPreview
+              album={albumPreview}
+              onConfirm={onAlbumConfirm || (() => {})}
+              onReject={onAlbumReject || (() => {})}
+              className="w-full"
             />
           </div>
         )}

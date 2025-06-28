@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
-import { ChatMessage as ChatMessageType, ChatResponse } from '../data/types';
+import { ChatMessage as ChatMessageType, ChatResponse, AlbumRecognitionResult, AlbumPreviewData } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 
 interface ChatInterfaceProps {
@@ -16,6 +16,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRecognizing, setIsRecognizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleImageSelect = (file: File) => {
@@ -46,6 +47,89 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     }
 
     return data.url;
+  };
+
+  const recognizeAlbum = async (file: File): Promise<AlbumRecognitionResult> => {
+    const supabase = createClient();
+    
+    // Convert file to base64
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const { data, error } = await supabase.functions.invoke('recognize-album', {
+      body: {
+        imageData: base64,
+        mimeType: file.type
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to recognize album');
+    }
+
+    return data as AlbumRecognitionResult;
+  };
+
+  const handleAlbumConfirm = (albumId: string) => {
+    setMessages(prev => prev.map(message => {
+      if (message.albumPreview && message.albumPreview.id === albumId) {
+        return {
+          ...message,
+          albumPreview: {
+            ...message.albumPreview,
+            isConfirmed: true,
+            isRejected: false
+          }
+        };
+      }
+      return message;
+    }));
+
+    // Add confirmation message
+    const confirmationMessage: ChatMessageType = {
+      id: Date.now().toString(),
+      content: 'Great! I\'ll add this album to your collection. You can view it in your library.',
+      sender: 'agent',
+      timestamp: new Date(),
+      type: 'text'
+    };
+
+    setMessages(prev => [...prev, confirmationMessage]);
+  };
+
+  const handleAlbumReject = (albumId: string) => {
+    setMessages(prev => prev.map(message => {
+      if (message.albumPreview && message.albumPreview.id === albumId) {
+        return {
+          ...message,
+          albumPreview: {
+            ...message.albumPreview,
+            isConfirmed: false,
+            isRejected: true
+          }
+        };
+      }
+      return message;
+    }));
+
+    // Add rejection message
+    const rejectionMessage: ChatMessageType = {
+      id: Date.now().toString(),
+      content: 'No problem! You can try uploading a different image or add the album manually.',
+      sender: 'agent',
+      timestamp: new Date(),
+      type: 'text'
+    };
+
+    setMessages(prev => [...prev, rejectionMessage]);
   };
 
   const handleSendMessage = async () => {
@@ -84,29 +168,90 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke('chat-response', {
-        body: { 
-          message: userMessage.content,
-          hasImage: !!imageFile,
-          imageUrl: uploadedImageUrl
-        }
-      });
+      // If there's an image, trigger album recognition
+      if (imageFile) {
+        setIsRecognizing(true);
+        try {
+          const recognitionResult = await recognizeAlbum(imageFile);
+          
+          // Add recognition result as agent message
+          let recognitionMessage: ChatMessageType;
+          
+          if (recognitionResult.error) {
+            recognitionMessage = {
+              id: (Date.now() + 1).toString(),
+              content: `I couldn't identify this album cover. ${recognitionResult.error}`,
+              sender: 'agent',
+              timestamp: new Date(),
+              type: 'text'
+            };
+          } else {
+            // Create album preview data
+            const albumPreview: AlbumPreviewData = {
+              id: (Date.now() + 1).toString(),
+              title: recognitionResult.title || 'Unknown Title',
+              artist: recognitionResult.artist || 'Unknown Artist',
+              year: recognitionResult.year || 'Unknown',
+              confidence: recognitionResult.confidence || 'medium',
+              imageUrl: uploadedImageUrl || URL.createObjectURL(imageFile),
+              isConfirmed: false,
+              isRejected: false
+            };
 
-      if (error) {
-        throw error;
+            recognitionMessage = {
+              id: (Date.now() + 1).toString(),
+              content: 'I found this album! Please review the details below:',
+              sender: 'agent',
+              timestamp: new Date(),
+              type: 'text',
+              albumPreview: albumPreview
+            };
+          }
+          
+          setMessages(prev => [...prev, recognitionMessage]);
+        } catch (recognitionError) {
+          console.error('Album recognition error:', recognitionError);
+          
+          const errorMessage: ChatMessageType = {
+            id: (Date.now() + 1).toString(),
+            content: 'I had trouble recognizing this album cover. You can still add it manually.',
+            sender: 'agent',
+            timestamp: new Date(),
+            type: 'text'
+          };
+          
+          setMessages(prev => [...prev, errorMessage]);
+        } finally {
+          setIsRecognizing(false);
+        }
       }
 
-      const response = data as ChatResponse;
-      const agentMessage: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        content: response.message,
-        sender: 'agent',
-        timestamp: new Date(response.timestamp),
-        type: 'text'
-      };
+      // Call regular chat endpoint for text processing
+      if (inputValue.trim()) {
+        const supabase = createClient();
+        const { data, error } = await supabase.functions.invoke('chat-response', {
+          body: { 
+            message: userMessage.content,
+            hasImage: !!imageFile,
+            imageUrl: uploadedImageUrl
+          }
+        });
 
-      setMessages(prev => [...prev, agentMessage]);
+        if (error) {
+          throw error;
+        }
+
+        const response = data as ChatResponse;
+        const agentMessage: ChatMessageType = {
+          id: (Date.now() + 2).toString(),
+          content: response.message,
+          sender: 'agent',
+          timestamp: new Date(response.timestamp),
+          type: 'text'
+        };
+
+        setMessages(prev => [...prev, agentMessage]);
+      }
     } catch (error) {
       console.error('Error calling chat endpoint:', error);
       
@@ -152,10 +297,13 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
               timestamp={message.timestamp}
               type={message.type}
               imageUrl={message.imageUrl}
+              albumPreview={message.albumPreview}
+              onAlbumConfirm={handleAlbumConfirm}
+              onAlbumReject={handleAlbumReject}
             />
           ))
         )}
-        {(isLoading || isUploading) && (
+        {(isLoading || isUploading || isRecognizing) && (
           <div className="flex justify-start">
             <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
               <div className="flex items-center space-x-2">
@@ -165,7 +313,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
                   <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
                 <span className="text-sm">
-                  {isUploading ? 'Uploading image...' : 'Processing...'}
+                  {isUploading ? 'Uploading image...' : 
+                   isRecognizing ? 'Recognizing album...' : 'Processing...'}
                 </span>
               </div>
             </div>
@@ -217,14 +366,14 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isLoading || isUploading}
+            disabled={isLoading || isUploading || isRecognizing}
           />
           <button
             onClick={handleSendMessage}
-            disabled={!canSend || isLoading || isUploading}
+            disabled={!canSend || isLoading || isUploading || isRecognizing}
             className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isUploading ? 'Uploading...' : 'Send'}
+            {isUploading ? 'Uploading...' : isRecognizing ? 'Recognizing...' : 'Send'}
           </button>
         </div>
       </div>

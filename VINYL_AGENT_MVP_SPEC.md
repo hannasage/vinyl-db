@@ -97,7 +97,7 @@ The project already has a solid foundation with:
 
 ### Phase 2: Image Upload Integration ✅ COMPLETED
 
-**Prompt 1: Create image upload component** ✅ COMPLETED
+**Prompt 1: Create image upload component** ✅
 "Create an `ImageUpload.tsx` component that allows users to select images from their phone or computer. Include drag-and-drop functionality, file picker button, and image preview. Support common image formats (jpg, png, webp) with proper validation."
 
 **Acceptance Criteria:**
@@ -110,7 +110,7 @@ The project already has a solid foundation with:
 - Displays error messages for invalid files
 - Responsive design works on mobile and desktop
 
-**Prompt 2: Integrate image upload into chat interface** ✅ COMPLETED
+**Prompt 2: Integrate image upload into chat interface** ✅
 "Add the image upload component to the chat interface. Position it next to the text input field with an upload button. Allow users to send both text and images in the same message."
 
 **Acceptance Criteria:**
@@ -121,7 +121,7 @@ The project already has a solid foundation with:
 - Upload button has proper loading states
 - Interface remains responsive with image upload added
 
-**Prompt 3: Update message types to support images** ✅ COMPLETED
+**Prompt 3: Update message types to support images** ✅
 "Extend the chat message system to support image messages. Update TypeScript interfaces in `data/types.ts` to include image URLs and metadata. Update ChatMessage component to display images properly."
 
 **Acceptance Criteria:**
@@ -132,7 +132,7 @@ The project already has a solid foundation with:
 - Message types are properly typed in TypeScript
 - ChatMessage component handles both text and image content
 
-**Prompt 4: Create image upload endpoint** ✅ COMPLETED
+**Prompt 4: Create image upload endpoint** ✅
 "Create a new Supabase Edge Function called `upload-image` that accepts image files, uploads them to Supabase Storage, and returns the public URL. Handle file validation and storage bucket configuration."
 
 **Acceptance Criteria:**
@@ -144,7 +144,7 @@ The project already has a solid foundation with:
 - Handles upload errors gracefully
 - Supports CORS for frontend requests
 
-**Prompt 5: Connect image upload to backend** ✅ COMPLETED
+**Prompt 5: Connect image upload to backend** ✅
 "Integrate the frontend image upload with the backend endpoint. Upload images to Supabase Storage before sending messages, and include image URLs in chat messages."
 
 **Acceptance Criteria:**
@@ -155,7 +155,65 @@ The project already has a solid foundation with:
 - Images are properly displayed in chat history
 - Upload progress is shown to user
 
-### Phase 3: Enhanced Chat Experience (SAVED FOR LATER)
+### Phase 3: GPT-4V Album Recognition
+
+**Prompt 1: Set up OpenAI API integration**
+"Create a new Supabase Edge Function called `recognize-album` that uses GPT-4V to identify album covers from uploaded images. Set up proper API key management and error handling."
+
+**Acceptance Criteria:**
+- Edge Function exists at `supabase/functions/recognize-album/index.ts`
+- OpenAI API key is properly configured via environment variables
+- Function accepts image URL and returns album metadata
+- Proper error handling for API failures and rate limits
+- CORS headers configured for frontend requests
+- Function is accessible via Supabase client
+
+**Prompt 2: Create album recognition prompt and response handling**
+"Design an effective prompt for GPT-4V to identify album covers and extract metadata. Handle the response to extract album title, artist, release year, and confidence level."
+
+**Acceptance Criteria:**
+- GPT-4V prompt effectively identifies album covers from images
+- Response parsing extracts album title, artist, and release year
+- Confidence scoring indicates reliability of recognition
+- Handles cases where album cannot be identified
+- Returns structured JSON response with metadata
+- Graceful handling of partial or uncertain responses
+
+**Prompt 3: Update chat interface to trigger album recognition**
+"Modify the chat interface to automatically trigger album recognition when an image is uploaded. Show recognition progress and display results in the chat."
+
+**Acceptance Criteria:**
+- Album recognition triggers automatically on image upload
+- Loading state shows during recognition process
+- Recognition results are displayed as agent message
+- Error handling for failed recognition attempts
+- User can still send text with image if needed
+- Recognition status is clearly communicated to user
+
+**Prompt 4: Create album preview component**
+"Build an `AlbumPreview.tsx` component that displays recognized album information in a card format. Include album artwork, title, artist, release year, and confirmation buttons."
+
+**Acceptance Criteria:**
+- AlbumPreview component exists in `components/AlbumPreview.tsx`
+- Displays album artwork, title, artist, and release year
+- Shows confidence level of recognition
+- Includes confirm/cancel action buttons
+- Responsive design works on mobile and desktop
+- Proper styling matches chat interface design
+- Component is reusable and properly typed
+
+**Prompt 5: Integrate album preview into chat flow**
+"Add the album preview component to the chat flow. Allow users to confirm or reject recognized albums, and handle the confirmation process."
+
+**Acceptance Criteria:**
+- Album preview appears in chat after recognition
+- Users can confirm or reject recognition results
+- Confirmed albums are stored for later processing
+- Rejected albums allow for manual correction
+- Preview integrates seamlessly with existing chat flow
+- Clear visual distinction between preview and regular messages
+
+### Phase 4: Enhanced Chat Experience (SAVED FOR LATER)
 
 **Prompt 6: Add message timestamps and styling**
 "Enhance the chat messages with timestamps, better styling, and message status indicators (sent, delivered, etc.). Add smooth animations for new messages appearing and improve the overall visual polish of the chat interface."
@@ -169,7 +227,7 @@ The project already has a solid foundation with:
 **Prompt 9: Enhance input field functionality**
 "Improve the chat input field with features like Enter key to send, Shift+Enter for new lines, character count, and input validation. Add a send button that's disabled when the input is empty."
 
-### Phase 4: Chat Interface Polish (SAVED FOR LATER)
+### Phase 5: Chat Interface Polish (SAVED FOR LATER)
 
 **Prompt 10: Add welcome message and instructions**
 "Display a welcome message when the chat loads, explaining how to use the interface. Add helpful instructions and example messages that users can click to send."
@@ -183,7 +241,7 @@ The project already has a solid foundation with:
 **Prompt 13: Implement message search**
 "Add a search functionality to find specific messages in the chat history. Include a search input in the header and highlight matching text in messages."
 
-### Phase 5: Mobile Optimization (SAVED FOR LATER)
+### Phase 6: Mobile Optimization (SAVED FOR LATER)
 
 **Prompt 14: Optimize for mobile devices**
 "Ensure the chat interface works seamlessly on mobile devices. Add touch-friendly interactions, responsive design, and mobile-specific UI improvements. Test on various screen sizes and add proper viewport handling."
@@ -191,7 +249,7 @@ The project already has a solid foundation with:
 **Prompt 15: Add mobile-specific features**
 "Implement mobile-specific features like swipe gestures, pull-to-refresh, and better keyboard handling. Add a floating action button for quick actions on mobile."
 
-### Phase 6: Testing and Documentation (SAVED FOR LATER)
+### Phase 7: Testing and Documentation (SAVED FOR LATER)
 
 **Prompt 16: Add comprehensive testing**
 "Create unit tests for chat components, integration tests for the chat endpoint, and basic end-to-end tests for the chat flow. Set up testing framework and ensure good test coverage."
@@ -210,3 +268,6 @@ The project already has a solid foundation with:
 - Image upload functionality works on both mobile and desktop
 - Images are properly stored and displayed in chat
 - File validation prevents invalid uploads
+- Album recognition accurately identifies album covers using GPT-4V
+- Recognized album metadata is properly displayed and confirmed
+- Album preview component provides clear confirmation interface
