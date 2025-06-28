@@ -34,3 +34,17 @@ export interface Collection extends SupabaseDbEntry {
   shortDescription: string;
   title: string;
 }
+
+// Chat Message Types
+export interface ChatMessage {
+  id: string;
+  content: string;
+  sender: 'user' | 'agent';
+  timestamp: Date;
+  type: 'text';
+}
+
+export interface ChatResponse {
+  message: string;
+  timestamp: string;
+}
