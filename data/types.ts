@@ -41,7 +41,9 @@ export interface ChatMessage {
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text';
+  type: 'text' | 'image';
+  imageUrl?: string;
+  imageFile?: File;
 }
 
 export interface ChatResponse {

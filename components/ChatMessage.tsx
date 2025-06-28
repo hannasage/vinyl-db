@@ -5,7 +5,8 @@ export interface ChatMessageProps {
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text';
+  type: 'text' | 'image';
+  imageUrl?: string;
   className?: string;
 }
 
@@ -13,6 +14,8 @@ export default function ChatMessage({
   content, 
   sender, 
   timestamp, 
+  type,
+  imageUrl,
   className = '' 
 }: ChatMessageProps) {
   const isUser = sender === 'user';
@@ -28,9 +31,25 @@ export default function ChatMessage({
             : 'bg-gray-200 text-gray-800'
         }`}
       >
-        <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`}>
-          {content}
-        </p>
+        {/* Image Display */}
+        {type === 'image' && imageUrl && (
+          <div className="mb-2">
+            <img
+              src={imageUrl}
+              alt="Uploaded content"
+              className="w-full h-32 object-cover rounded-lg"
+            />
+          </div>
+        )}
+        
+        {/* Text Content */}
+        {content && (
+          <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`}>
+            {content}
+          </p>
+        )}
+        
+        {/* Timestamp */}
         <p className={`text-xs mt-1 ${
           isUser ? 'text-blue-100' : 'text-gray-500'
         }`}>
