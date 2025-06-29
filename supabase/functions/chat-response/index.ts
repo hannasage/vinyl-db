@@ -10,6 +10,19 @@ interface Tool {
   execute: (params: any, supabase: any) => Promise<any>;
 }
 
+// Multi-step execution plan interface
+interface ExecutionStep {
+  tool: string;
+  parameters: any;
+  description: string;
+}
+
+interface ExecutionPlan {
+  steps: ExecutionStep[];
+  summary: string;
+  estimatedSteps: number;
+}
+
 // Collection Query Tool
 const collectionQueryTool: Tool = {
   name: 'collection_query',
@@ -34,6 +47,215 @@ const collectionQueryTool: Tool = {
 const tools: Record<string, Tool> = {
   collection_query: collectionQueryTool
 };
+
+// Function to plan multi-step operations using GPT
+async function planMultiStepOperation(message: string): Promise<ExecutionPlan | null> {
+  try {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      return null;
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    // Build tool descriptions dynamically
+    const toolDescriptions = Object.values(tools).map(tool => 
+      `- "${tool.name}": ${tool.description}`
+    ).join('\n');
+
+    const systemPrompt = `You are a helpful assistant that plans multi-step operations for vinyl collection management.
+
+Your job is to:
+1. Analyze if the user's request requires multiple steps
+2. Break down complex operations into sequential tool calls
+3. Create an execution plan with clear steps
+
+Available tools:
+${toolDescriptions}
+
+Multi-step scenarios to detect:
+- Batch queries: "Do I have these albums: Dark Side of the Moon, Abbey Road, The Wall?"
+- Batch operations: "Add these albums to my collection: [list]"
+- Complex queries: "Check if I have any Pink Floyd or Beatles albums"
+
+IMPORTANT: Use exact parameter names as defined in the tool descriptions:
+- collection_query: albumName (optional), artistName (optional)
+
+Response format (JSON only):
+{
+  "isMultiStep": true/false,
+  "plan": {
+    "steps": [
+      {
+        "tool": "tool_name",
+        "parameters": { /* tool parameters with exact names */ },
+        "description": "What this step does"
+      }
+    ],
+    "summary": "Brief description of the overall operation",
+    "estimatedSteps": number
+  }
+}
+
+If the request is simple (single tool call), return:
+{
+  "isMultiStep": false,
+  "plan": null
+}
+
+Examples:
+- "Do I have Dark Side of the Moon?" → {"isMultiStep": false, "plan": null}
+- "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}], "summary": "Check collection status for multiple albums", "estimatedSteps": 2 }}
+- "Do I have any Pink Floyd albums?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "description": "Check for albums by Pink Floyd"}], "summary": "Check collection status for Pink Floyd albums", "estimatedSteps": 1 }}
+
+Only return JSON, no other text.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.1,
+      max_tokens: 500
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    
+    if (!content) {
+      return null;
+    }
+
+    const parsed = JSON.parse(content);
+    
+    if (parsed.isMultiStep && parsed.plan) {
+      return parsed.plan;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error planning multi-step operation:', error);
+    return null;
+  }
+}
+
+// Function to execute a single step
+async function executeStep(step: ExecutionStep, supabase: any, userMessage: string) {
+  const tool = tools[step.tool];
+  
+  if (!tool) {
+    throw new Error(`Unknown tool: ${step.tool}`);
+  }
+
+  try {
+    const result = await tool.execute(step.parameters, supabase);
+    return {
+      success: true,
+      result,
+      step: step.description
+    };
+  } catch (error) {
+    console.error(`Step execution error for ${step.tool}:`, error);
+    return {
+      success: false,
+      error: error.message,
+      step: step.description
+    };
+  }
+}
+
+// Function to execute multi-step plan
+async function executeMultiStepPlan(plan: ExecutionPlan, supabase: any, userMessage: string) {
+  const results = [];
+  const errors = [];
+  
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i];
+    console.log(`Executing step ${i + 1}/${plan.steps.length}: ${step.description}`);
+    
+    const stepResult = await executeStep(step, supabase, userMessage);
+    
+    if (stepResult.success) {
+      results.push(stepResult);
+    } else {
+      errors.push(stepResult);
+    }
+  }
+  
+  return {
+    completed: results.length,
+    total: plan.steps.length,
+    results,
+    errors,
+    summary: plan.summary
+  };
+}
+
+// Function to format multi-step results
+function formatMultiStepResponse(executionResult: any) {
+  const { completed, total, results, errors, summary } = executionResult;
+  
+  if (errors.length === 0) {
+    // All steps succeeded
+    const albumResults = results.map(r => r.result).filter(r => r.found);
+    const notFound = results.map(r => r.result).filter(r => !r.found);
+    
+    let message = `✅ Completed ${summary}\n\n`;
+    
+    if (albumResults.length > 0) {
+      message += `**Found in your collection:**\n`;
+      albumResults.forEach(result => {
+        result.albums.forEach(album => {
+          message += `• "${album.title}" by ${album.artist_name}\n`;
+        });
+      });
+    }
+    
+    if (notFound.length > 0) {
+      message += `\n**Not in your collection:**\n`;
+      notFound.forEach(result => {
+        message += `• ${result.message}\n`;
+      });
+    }
+    
+    return {
+      message,
+      type: 'multi_step_success',
+      data: executionResult
+    };
+  } else {
+    // Some steps failed
+    let message = `⚠️ Partially completed ${summary}\n\n`;
+    message += `✅ Completed: ${completed}/${total} steps\n`;
+    message += `❌ Failed: ${errors.length} steps\n\n`;
+    
+    if (results.length > 0) {
+      message += `**Successful results:**\n`;
+      results.forEach(r => {
+        if (r.result.found) {
+          r.result.albums.forEach(album => {
+            message += `• "${album.title}" by ${album.artist_name}\n`;
+          });
+        }
+      });
+    }
+    
+    if (errors.length > 0) {
+      message += `\n**Errors:**\n`;
+      errors.forEach(e => {
+        message += `• ${e.step}: ${e.error}\n`;
+      });
+    }
+    
+    return {
+      message,
+      type: 'multi_step_partial',
+      data: executionResult
+    };
+  }
+}
 
 // Function to parse user message using GPT and determine tool to use
 async function parseMessageWithGPT(message: string) {
@@ -118,14 +340,19 @@ Examples:
 }
 
 // Function to execute a tool
-async function executeTool(toolName: string, parameters: any, supabase: any) {
+async function executeTool(toolName: string, parameters: any, supabase: any, userMessage: string) {
   const tool = tools[toolName];
   
   if (!tool) {
     throw new Error(`Unknown tool: ${toolName}`);
   }
 
-  return await tool.execute(parameters, supabase);
+  try {
+    return await tool.execute(parameters, supabase);
+  } catch (error) {
+    console.error(`Tool execution error for ${toolName}:`, error);
+    throw error;
+  }
 }
 
 // Function to format response based on tool result
@@ -219,7 +446,30 @@ Deno.serve(async (req) => {
       mimeType: requestData.mimeType || 'No mime type'
     });
 
-    // Parse the message using GPT
+    // First, check if this is a multi-step operation
+    const multiStepPlan = await planMultiStepOperation(userMessage);
+    
+    if (multiStepPlan) {
+      // Execute multi-step plan
+      console.log('Executing multi-step plan:', multiStepPlan);
+      const executionResult = await executeMultiStepPlan(multiStepPlan, supabase, userMessage);
+      const formattedResponse = formatMultiStepResponse(executionResult);
+      
+      return new Response(JSON.stringify({
+        message: formattedResponse.message,
+        timestamp: new Date().toISOString(),
+        type: formattedResponse.type,
+        data: formattedResponse.data
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
+    // Parse the message using GPT for single-step operations
     const parsedMessage = await parseMessageWithGPT(userMessage);
     console.log('GPT parsing result:', parsedMessage);
 
@@ -227,7 +477,7 @@ Deno.serve(async (req) => {
     if (parsedMessage.tool && parsedMessage.tool !== 'general' && tools[parsedMessage.tool]) {
       // Execute the specified tool
       try {
-        const toolResult = await executeTool(parsedMessage.tool, parsedMessage.parameters, supabase);
+        const toolResult = await executeTool(parsedMessage.tool, parsedMessage.parameters, supabase, userMessage);
         const formattedResponse = formatToolResponse(parsedMessage.tool, toolResult);
         
         return new Response(JSON.stringify({
@@ -260,7 +510,7 @@ Deno.serve(async (req) => {
 
     // Default response for general queries or when GPT parsing fails
     const response = {
-      message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Is Abbey Road by The Beatles in my collection?'",
+      message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Do I have these albums: Dark Side of the Moon, Abbey Road?'",
       timestamp: new Date().toISOString(),
       type: 'general'
     };

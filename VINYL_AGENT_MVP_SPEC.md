@@ -156,9 +156,9 @@ The project already has a solid foundation with:
 - Images are properly displayed in chat history
 - Upload progress is shown to user
 
-### Phase 3: Collection Query Agent
+### Phase 3: Collection Query Agent ✅ COMPLETED
 
-**Prompt 1: Create collection query endpoint**
+**Prompt 1: Create collection query endpoint** ✅
 "Create a new Supabase Edge Function called `query-collection` that accepts album name and artist, then queries the user's collection to check if they own the album. Return detailed information about the album if found."
 
 **Acceptance Criteria:**
@@ -171,7 +171,7 @@ The project already has a solid foundation with:
 - Proper error handling for database queries
 - CORS headers configured for frontend requests
 
-**Prompt 2: Update chat response to handle collection queries**
+**Prompt 2: Update chat response to handle collection queries** ✅
 "Modify the existing `chat-response` Edge Function to parse user messages for album/artist information and call the collection query endpoint. Return helpful responses about collection status."
 
 **Acceptance Criteria:**
@@ -183,7 +183,7 @@ The project already has a solid foundation with:
 - Provides helpful prompts when information is missing
 - Maintains conversation context and flow
 
-**Prompt 3: Add natural language processing for album detection**
+**Prompt 3: Add natural language processing for album detection** ✅
 "Implement basic NLP to extract album names and artists from user messages. Handle various input formats like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Pink Floyd - Dark Side of the Moon'."
 
 **Acceptance Criteria:**
@@ -195,7 +195,7 @@ The project already has a solid foundation with:
 - Graceful handling of unclear or incomplete information
 - Provides helpful prompts for clarification when needed
 
-**Prompt 4: Create collection status display component**
+**Prompt 4: Create collection status display component** ✅
 "Build a `CollectionStatus.tsx` component that displays whether an album is in the user's collection, along with relevant details like condition, purchase date, and notes."
 
 **Acceptance Criteria:**
@@ -207,7 +207,7 @@ The project already has a solid foundation with:
 - Responsive design matches chat interface
 - Component is reusable and properly typed
 
-**Prompt 5: Integrate collection status into chat flow**
+**Prompt 5: Integrate collection status into chat flow** ✅
 "Add the collection status component to the chat flow. Display collection information as part of agent responses when albums are queried."
 
 **Acceptance Criteria:**
@@ -218,7 +218,66 @@ The project already has a solid foundation with:
 - Provides context for collection management decisions
 - Maintains chat conversation flow and history
 
-### Phase 4: Enhanced Chat Experience (SAVED FOR LATER)
+### Phase 4: CRUD Operations & Multi-Step Agent
+
+**Prompt 1: Design multi-step agent execution framework**
+"Enhance the chat-response endpoint to support multi-step agent execution. Allow the agent to plan and execute multiple tool calls in sequence for complex operations like batch album management."
+
+**Acceptance Criteria:**
+- Agent can plan multi-step operations using GPT
+- Support for sequential tool execution
+- Ability to handle arrays of albums/artists in single commands
+- Progress tracking and status updates during execution
+- Error handling that can rollback or continue partial operations
+- Clear communication of multi-step progress to user
+
+**Prompt 2: Create add album tool and endpoint**
+"Create a new Supabase Edge Function called `add-album` that adds albums to the user's collection. Handle artist creation if needed and validate input data."
+
+**Acceptance Criteria:**
+- Edge Function exists at `supabase/functions/add-album/index.ts`
+- Accepts album name, artist name, and optional metadata
+- Creates artist record if it doesn't exist
+- Creates album record with proper foreign key relationships
+- Validates input data and handles duplicates
+- Returns structured response with created album details
+- Proper error handling and rollback on failures
+
+**Prompt 3: Create remove album tool and endpoint**
+"Create a new Supabase Edge Function called `remove-album` that removes albums from the user's collection. Handle cleanup of orphaned artists if needed."
+
+**Acceptance Criteria:**
+- Edge Function exists at `supabase/functions/remove-album/index.ts`
+- Accepts album ID or album name + artist for identification
+- Removes album record from database
+- Cleans up orphaned artists (no remaining albums)
+- Confirms deletion with user before proceeding
+- Returns structured response with deletion status
+- Proper error handling for non-existent albums
+
+**Prompt 4: Update agent to handle batch operations**
+"Enhance the agent's message parsing to detect batch operations like 'add these albums to my library' or 'do I have these albums?' and plan appropriate multi-step execution."
+
+**Acceptance Criteria:**
+- Agent can parse batch album lists from user messages
+- Generates execution plans for multi-album operations
+- Handles both batch queries and batch modifications
+- Provides progress updates during batch operations
+- Summarizes results of batch operations
+- Graceful handling of partial failures in batch operations
+
+**Prompt 5: Create album management interface components**
+"Build components for album addition/removal confirmation and batch operation progress tracking. Integrate these into the chat flow."
+
+**Acceptance Criteria:**
+- AlbumAction component for add/remove confirmations
+- BatchProgress component for multi-step operation tracking
+- Integration with existing chat message system
+- Clear visual feedback for pending actions
+- Confirmation dialogs for destructive operations
+- Progress indicators for long-running batch operations
+
+### Phase 5: Enhanced Chat Experience (SAVED FOR LATER)
 
 **Prompt 6: Add message timestamps and styling**
 "Enhance the chat messages with timestamps, better styling, and message status indicators (sent, delivered, etc.). Add smooth animations for new messages appearing and improve the overall visual polish of the chat interface."
@@ -265,15 +324,21 @@ The project already has a solid foundation with:
 ## Success Criteria
 - Chat interface provides a natural, intuitive messaging experience
 - Messages are properly displayed with clear visual distinction between user and agent
-- Agent can parse user messages to extract album and artist information
+- Agent can parse user messages to extract album and artist information using AI
 - Collection queries return accurate information about album ownership
 - Agent provides helpful responses about collection status
 - Interface works seamlessly on both desktop and mobile devices
 - Chat history persists across page refreshes
-- Error handling is robust and user-friendly
+- Error handling is robust and user-friendly with AI-powered error messages
 - Performance is optimized for quick message display
 - Image upload functionality works on both mobile and desktop
 - Images are properly stored and displayed in chat
 - File validation prevents invalid uploads
 - Collection status is clearly displayed with relevant details
 - Natural language processing accurately extracts album information from various input formats
+- Agent supports flexible queries (artist only, album only, or both)
+- Multi-step agent execution framework supports complex batch operations
+- CRUD operations allow adding and removing albums from collection
+- Batch operations handle multiple albums in single commands
+- Progress tracking provides clear feedback during multi-step operations
+- Album management interface provides confirmation and progress indicators
