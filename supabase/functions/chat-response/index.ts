@@ -43,9 +43,36 @@ const collectionQueryTool: Tool = {
   }
 };
 
+// Add Album Tool
+const addAlbumTool: Tool = {
+  name: 'add_album',
+  description: 'Add a new album to the user\'s vinyl collection',
+  parameters: {
+    albumName: 'string',
+    artistName: 'string',
+    releaseYear: 'number (optional)',
+    variant: 'string (optional)',
+    purchaseDate: 'string (optional)',
+    acquiredDate: 'string (optional)',
+    preordered: 'boolean (optional)',
+    artworkUrl: 'string (optional)',
+    size: 'number (optional)'
+  },
+  execute: async (params: any, supabase: any) => {
+    const { data, error } = await supabase.functions.invoke('add-album', {
+      body: params
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+};
+
 // Tool registry for easy extension
 const tools: Record<string, Tool> = {
-  collection_query: collectionQueryTool
+  collection_query: collectionQueryTool,
+  add_album: addAlbumTool
 };
 
 // Function to plan multi-step operations using GPT
@@ -82,6 +109,7 @@ Multi-step scenarios to detect:
 
 IMPORTANT: Use exact parameter names as defined in the tool descriptions:
 - collection_query: albumName (optional), artistName (optional)
+- add_album: albumName, artistName, releaseYear (optional), variant (optional), purchaseDate (optional), acquiredDate (optional), preordered (optional), artworkUrl (optional), size (optional)
 
 Response format (JSON only):
 {
@@ -109,6 +137,7 @@ Examples:
 - "Do I have Dark Side of the Moon?" → {"isMultiStep": false, "plan": null}
 - "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}], "summary": "Check collection status for multiple albums", "estimatedSteps": 2 }}
 - "Do I have any Pink Floyd albums?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "description": "Check for albums by Pink Floyd"}], "summary": "Check collection status for Pink Floyd albums", "estimatedSteps": 1 }}
+- "Add these albums to my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"isMultiStep": true, "plan": { "steps": [{"tool": "add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd"}, {"tool": "add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles"}], "summary": "Add multiple albums to collection", "estimatedSteps": 2 }}
 
 Only return JSON, no other text.`;
 
@@ -360,6 +389,8 @@ function formatToolResponse(toolName: string, result: any) {
   switch (toolName) {
     case 'collection_query':
       return formatCollectionResponse(result);
+    case 'add_album':
+      return formatAddAlbumResponse(result);
     default:
       return {
         message: 'Tool executed successfully',
@@ -401,6 +432,27 @@ function formatCollectionResponse(queryResult: any) {
       data: queryResult
     };
   }
+}
+
+// Function to format add album response
+function formatAddAlbumResponse(result: any) {
+  if (!result.success) {
+    return {
+      message: `❌ ${result.message}`,
+      type: 'add_album_failed',
+      data: result
+    };
+  }
+
+  const album = result.album;
+  const variantInfo = album.variant ? ` (${album.variant})` : '';
+  const yearInfo = album.release_year ? ` (${album.release_year})` : '';
+  
+  return {
+    message: `✅ ${result.message}${variantInfo}${yearInfo}`,
+    type: 'add_album_success',
+    data: result
+  };
 }
 
 Deno.serve(async (req) => {
