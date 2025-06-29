@@ -35,6 +35,17 @@ export interface Collection extends SupabaseDbEntry {
   title: string;
 }
 
+export interface AlbumPreviewData {
+  id: string;
+  title: string;
+  artist: string;
+  year?: string;
+  imageUrl?: string;
+  confidence: 'high' | 'medium' | 'low';
+  isConfirmed?: boolean;
+  isRejected?: boolean;
+}
+
 // Chat Message Types
 export interface ChatMessage extends SupabaseDbEntry {
   content: string;

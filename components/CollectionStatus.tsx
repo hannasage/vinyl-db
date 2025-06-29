@@ -53,6 +53,8 @@ export default function CollectionStatus({
 
   if (albums.length === 1) {
     const album = albums[0];
+    const hasArtwork = album.artwork_url && album.artwork_url.trim() !== '';
+    
     return (
       <div className={`bg-green-50 border border-green-200 rounded-lg p-4 ${className}`}>
         <div className="flex items-center space-x-2 mb-3">
@@ -64,15 +66,21 @@ export default function CollectionStatus({
         
         <div className="flex space-x-4">
           {/* Album Artwork */}
-          {album.artwork_url && (
-            <div className="flex-shrink-0">
+          <div className="flex-shrink-0">
+            {hasArtwork ? (
               <img
                 src={album.artwork_url}
                 alt={`${album.title} by ${album.artist_name}`}
                 className="w-16 h-16 object-cover rounded-lg shadow-sm"
               />
-            </div>
-          )}
+            ) : (
+              <div className="w-16 h-16 bg-gray-200 flex items-center justify-center rounded-lg shadow-sm border border-gray-300">
+                <div className="text-center text-gray-500">
+                  <div className="text-lg">🎵</div>
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* Album Details */}
           <div className="flex-1">
@@ -120,41 +128,51 @@ export default function CollectionStatus({
       </p>
       
       <div className="space-y-3">
-        {albums.map((album, index) => (
-          <div key={album.id} className="flex space-x-3 p-3 bg-white rounded-lg border border-blue-100">
-            {/* Album Artwork */}
-            {album.artwork_url && (
+        {albums.map((album, index) => {
+          const hasArtwork = album.artwork_url && album.artwork_url.trim() !== '';
+          
+          return (
+            <div key={album.id} className="flex space-x-3 p-3 bg-white rounded-lg border border-blue-100">
+              {/* Album Artwork */}
               <div className="flex-shrink-0">
-                <img
-                  src={album.artwork_url}
-                  alt={`${album.title} by ${album.artist_name}`}
-                  className="w-12 h-12 object-cover rounded shadow-sm"
-                />
+                {hasArtwork ? (
+                  <img
+                    src={album.artwork_url}
+                    alt={`${album.title} by ${album.artist_name}`}
+                    className="w-12 h-12 object-cover rounded shadow-sm"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-gray-200 flex items-center justify-center rounded shadow-sm border border-gray-300">
+                    <div className="text-center text-gray-500">
+                      <div className="text-sm">🎵</div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-            
-            {/* Album Details */}
-            <div className="flex-1">
-              <h4 className="font-medium text-gray-900">{album.title}</h4>
-              <p className="text-sm text-gray-600">{album.artist_name}</p>
               
-              <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-                {album.release_year && (
-                  <p>Released: {album.release_year}</p>
-                )}
-                {album.variant && (
-                  <p>Variant: {album.variant}</p>
-                )}
-                {album.purchase_date && (
-                  <p>Purchased: {new Date(album.purchase_date).toLocaleDateString()}</p>
-                )}
-                {album.preordered && (
-                  <p className="text-blue-600 font-medium">🔄 Preordered</p>
-                )}
+              {/* Album Details */}
+              <div className="flex-1">
+                <h4 className="font-medium text-gray-900">{album.title}</h4>
+                <p className="text-sm text-gray-600">{album.artist_name}</p>
+                
+                <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                  {album.release_year && (
+                    <p>Released: {album.release_year}</p>
+                  )}
+                  {album.variant && (
+                    <p>Variant: {album.variant}</p>
+                  )}
+                  {album.purchase_date && (
+                    <p>Purchased: {new Date(album.purchase_date).toLocaleDateString()}</p>
+                  )}
+                  {album.preordered && (
+                    <p className="text-blue-600 font-medium">🔄 Preordered</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

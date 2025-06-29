@@ -37,15 +37,26 @@ export default function AlbumPreview({ album, onConfirm, onReject, className = '
     }
   };
 
+  const hasImage = album.imageUrl && album.imageUrl.trim() !== '';
+
   return (
     <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 max-w-sm ${className}`}>
       {/* Album Artwork */}
       <div className="mb-4">
-        <img
-          src={album.imageUrl}
-          alt={`${album.title} by ${album.artist}`}
-          className="w-full h-48 object-cover rounded-lg shadow-sm"
-        />
+        {hasImage ? (
+          <img
+            src={album.imageUrl}
+            alt={`${album.title} by ${album.artist}`}
+            className="w-full h-48 object-cover rounded-lg shadow-sm"
+          />
+        ) : (
+          <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded-lg shadow-sm border border-gray-300">
+            <div className="text-center text-gray-500">
+              <div className="text-4xl mb-2">🎵</div>
+              <div className="text-sm font-medium">Coming Soon</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Album Information */}
