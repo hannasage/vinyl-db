@@ -20,120 +20,13 @@ const collectionQueryTool: Tool = {
   },
   execute: async (params: any, supabase: any) => {
     const { albumName, artistName } = params;
-    
-    // Validate that at least one parameter is provided
-    if (!albumName && !artistName) {
-      throw new Error('At least one of albumName or artistName is required');
+    const { data, error } = await supabase.functions.invoke('query-collection', {
+      body: { albumName, artistName }
+    });
+    if (error) {
+      throw error;
     }
-
-    let query = supabase.from('album').select(`
-      id,
-      title,
-      artist_id,
-      variant,
-      purchase_date,
-      acquired_date,
-      preordered,
-      artwork_url,
-      release_year,
-      size
-    `);
-
-    // If artist name is provided, filter by artist
-    if (artistName) {
-      // First get artist IDs that match the name
-      const { data: artists, error: artistError } = await supabase
-        .from('artist')
-        .select('id, name')
-        .ilike('name', `%${artistName}%`);
-
-      if (artistError) {
-        throw artistError;
-      }
-
-      if (!artists || artists.length === 0) {
-        return {
-          found: false,
-          message: `No artist found matching "${artistName}"`,
-          albumName: albumName || null,
-          artistName
-        };
-      }
-
-      const artistIds = artists.map(artist => artist.id);
-      query = query.in('artist_id', artistIds);
-    }
-
-    // If album name is provided, filter by album title
-    if (albumName) {
-      query = query.ilike('title', `%${albumName}%`);
-    }
-
-    // Execute the query
-    const { data: albums, error: albumError } = await query;
-
-    if (albumError) {
-      throw albumError;
-    }
-
-    if (!albums || albums.length === 0) {
-      let message = '';
-      if (albumName && artistName) {
-        message = `No album "${albumName}" found for artist "${artistName}"`;
-      } else if (albumName) {
-        message = `No album found matching "${albumName}"`;
-      } else if (artistName) {
-        message = `No albums found for artist "${artistName}"`;
-      }
-      
-      return {
-        found: false,
-        message,
-        albumName: albumName || null,
-        artistName: artistName || null
-      };
-    }
-
-    // Get artist information for all albums
-    const artistIds = [...new Set(albums.map(album => album.artist_id))];
-    const { data: artists, error: artistsError } = await supabase
-      .from('artist')
-      .select('id, name')
-      .in('id', artistIds);
-
-    if (artistsError) {
-      throw artistsError;
-    }
-
-    // Create artist lookup map
-    const artistMap = artists.reduce((acc, artist) => {
-      acc[artist.id] = artist.name;
-      return acc;
-    }, {});
-
-    // Return the found album(s) with artist information
-    const results = albums.map(album => ({
-      ...album,
-      artist_name: artistMap[album.artist_id] || 'Unknown Artist'
-    }));
-
-    // Generate appropriate message based on query type
-    let message = '';
-    if (albumName && artistName) {
-      message = `Found ${results.length} album(s) matching "${albumName}" by "${artistName}"`;
-    } else if (albumName) {
-      message = `Found ${results.length} album(s) matching "${albumName}"`;
-    } else if (artistName) {
-      message = `Found ${results.length} album(s) by "${artistName}"`;
-    }
-
-    return {
-      found: true,
-      message,
-      albums: results,
-      albumName: albumName || null,
-      artistName: artistName || null
-    };
+    return data;
   }
 };
 
