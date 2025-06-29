@@ -29,6 +29,14 @@ Deno.serve(async (req) => {
     // Get the request body
     const requestData = await req.json().catch(() => ({}));
     
+    // Log the received data for debugging
+    console.log('Received request data:', {
+      message: requestData.message || 'No message',
+      hasImage: requestData.hasImage || false,
+      imageData: requestData.imageData ? `Base64 data (${requestData.imageData.length} chars)` : 'No image data',
+      mimeType: requestData.mimeType || 'No mime type'
+    });
+    
     // Create response
     const response = {
       message: "Hello, chat!",
