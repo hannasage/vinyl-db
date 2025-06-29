@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import { ChatMessageType, ChatResponse } from '../data/types';
@@ -215,7 +215,6 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             onImageSelect={handleImageSelect}
             onError={handleImageError}
             className=""
-            iconOnly
           />
           {/* If image selected, show thumbnail */}
           {selectedImageUrl && (
