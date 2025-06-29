@@ -1,12 +1,14 @@
 import React from 'react';
+import CollectionStatus from './CollectionStatus';
 
 export interface ChatMessageProps {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'collection_status';
   imageUrl?: string;
+  data?: any; // For collection query results
   className?: string;
 }
 
@@ -16,6 +18,7 @@ export default function ChatMessage({
   timestamp, 
   type,
   imageUrl,
+  data,
   className = '' 
 }: ChatMessageProps) {
   const isUser = sender === 'user';
@@ -38,6 +41,19 @@ export default function ChatMessage({
               src={imageUrl}
               alt="Uploaded content"
               className="w-full h-32 object-cover rounded-lg"
+            />
+          </div>
+        )}
+        
+        {/* Collection Status Display */}
+        {type === 'collection_status' && data && (
+          <div className="mb-2">
+            <CollectionStatus
+              found={data.found}
+              albums={data.albums}
+              albumName={data.albumName}
+              artistName={data.artistName}
+              message={data.message}
             />
           </div>
         )}

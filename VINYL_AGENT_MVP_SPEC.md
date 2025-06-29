@@ -1,7 +1,7 @@
 # Vinyl Agent MVP Specification
 
 ## Project Overview
-A progressive web application that allows users to manage their vinyl record collection through a chat interface. Users can photograph album covers, have them automatically recognized and populated, review the information, and add records to their personal database.
+A progressive web application that allows users to manage their vinyl record collection through a chat interface. Users can send album names and artists to the agent, which can query their existing collection to confirm ownership and provide collection management assistance.
 
 ## Current Project Architecture
 The project already has a solid foundation with:
@@ -12,24 +12,25 @@ The project already has a solid foundation with:
 - **Supabase Edge Functions** for API calls
 - **Authentication** system using Supabase Auth
 - **Existing components** for album display and filtering
+- **Chat interface** with message system and image upload capabilities
 
 ## Core User Journey
 1. User opens PWA at hosted URL
 2. User logs in/authenticates (existing Supabase Auth)
-3. User uploads photo of album cover
-4. Agent recognizes album and fetches metadata
-5. User reviews and approves information
-6. Record is added to user's database using existing schema
+3. User sends album name and artist in chat
+4. Agent queries existing collection to check ownership
+5. Agent responds with confirmation and collection details
+6. User can manage their collection through the chat interface
 
 ## Technical Stack (Current + Additions)
 - **Frontend**: Next.js 14 with App Router (existing)
 - **Backend**: Next.js API routes + Supabase Edge Functions (existing)
 - **Database**: Supabase PostgreSQL with existing schema
 - **Authentication**: Supabase Auth (existing)
-- **Storage**: Supabase Storage buckets (to be added)
+- **Storage**: Supabase Storage buckets (existing)
 - **Edge Functions**: Supabase Edge Functions (existing)
-- **Image Recognition**: Integration with album cover recognition API
-- **Album Metadata**: Integration with music database API (Discogs, MusicBrainz, etc.)
+- **Chat Interface**: React-based chat system with message history (existing)
+- **Collection Querying**: Database queries through Supabase Edge Functions
 - **Deployment**: Vercel (recommended for Next.js)
 
 ## Implementation Prompts
@@ -155,63 +156,67 @@ The project already has a solid foundation with:
 - Images are properly displayed in chat history
 - Upload progress is shown to user
 
-### Phase 3: GPT-4V Album Recognition
+### Phase 3: Collection Query Agent
 
-**Prompt 1: Set up OpenAI API integration**
-"Create a new Supabase Edge Function called `recognize-album` that uses GPT-4V to identify album covers from uploaded images. Set up proper API key management and error handling."
+**Prompt 1: Create collection query endpoint**
+"Create a new Supabase Edge Function called `query-collection` that accepts album name and artist, then queries the user's collection to check if they own the album. Return detailed information about the album if found."
 
 **Acceptance Criteria:**
-- Edge Function exists at `supabase/functions/recognize-album/index.ts`
-- OpenAI API key is properly configured via environment variables
-- Function accepts image URL and returns album metadata
-- Proper error handling for API failures and rate limits
+- Edge Function exists at `supabase/functions/query-collection/index.ts`
+- Accepts POST requests with album name and artist parameters
+- Queries the existing database schema (album, artist, collection, entry tables)
+- Returns structured JSON response with album details if found
+- Returns appropriate response when album is not found
+- Handles fuzzy matching for album/artist names
+- Proper error handling for database queries
 - CORS headers configured for frontend requests
-- Function is accessible via Supabase client
 
-**Prompt 2: Create album recognition prompt and response handling**
-"Design an effective prompt for GPT-4V to identify album covers and extract metadata. Handle the response to extract album title, artist, release year, and confidence level."
-
-**Acceptance Criteria:**
-- GPT-4V prompt effectively identifies album covers from images
-- Response parsing extracts album title, artist, and release year
-- Confidence scoring indicates reliability of recognition
-- Handles cases where album cannot be identified
-- Returns structured JSON response with metadata
-- Graceful handling of partial or uncertain responses
-
-**Prompt 3: Update chat interface to trigger album recognition**
-"Modify the chat interface to automatically trigger album recognition when an image is uploaded. Show recognition progress and display results in the chat."
+**Prompt 2: Update chat response to handle collection queries**
+"Modify the existing `chat-response` Edge Function to parse user messages for album/artist information and call the collection query endpoint. Return helpful responses about collection status."
 
 **Acceptance Criteria:**
-- Album recognition triggers automatically on image upload
-- Loading state shows during recognition process
-- Recognition results are displayed as agent message
-- Error handling for failed recognition attempts
-- User can still send text with image if needed
-- Recognition status is clearly communicated to user
+- Chat response function parses incoming messages for album information
+- Detects album name and artist from user input
+- Calls collection query endpoint when album information is detected
+- Returns formatted responses about collection status
+- Handles cases where album information is unclear
+- Provides helpful prompts when information is missing
+- Maintains conversation context and flow
 
-**Prompt 4: Create album preview component**
-"Build an `AlbumPreview.tsx` component that displays recognized album information in a card format. Include album artwork, title, artist, release year, and confirmation buttons."
+**Prompt 3: Add natural language processing for album detection**
+"Implement basic NLP to extract album names and artists from user messages. Handle various input formats like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Pink Floyd - Dark Side of the Moon'."
 
 **Acceptance Criteria:**
-- AlbumPreview component exists in `components/AlbumPreview.tsx`
-- Displays album artwork, title, artist, and release year
-- Shows confidence level of recognition
-- Includes confirm/cancel action buttons
-- Responsive design works on mobile and desktop
-- Proper styling matches chat interface design
+- Function can extract album and artist from various message formats
+- Handles common question patterns ("Do I have...", "Is...in my collection")
+- Supports different separators (by, -, etc.)
+- Handles partial matches and fuzzy search
+- Returns structured data for album name and artist
+- Graceful handling of unclear or incomplete information
+- Provides helpful prompts for clarification when needed
+
+**Prompt 4: Create collection status display component**
+"Build a `CollectionStatus.tsx` component that displays whether an album is in the user's collection, along with relevant details like condition, purchase date, and notes."
+
+**Acceptance Criteria:**
+- CollectionStatus component exists in `components/CollectionStatus.tsx`
+- Displays clear status (Owned/Not Owned)
+- Shows album artwork, title, artist, and release year
+- Displays collection details like condition and purchase date
+- Includes action buttons for collection management
+- Responsive design matches chat interface
 - Component is reusable and properly typed
 
-**Prompt 5: Integrate album preview into chat flow**
-"Add the album preview component to the chat flow. Allow users to confirm or reject recognized albums, and handle the confirmation process."
+**Prompt 5: Integrate collection status into chat flow**
+"Add the collection status component to the chat flow. Display collection information as part of agent responses when albums are queried."
 
 **Acceptance Criteria:**
-- Album preview appears in chat after recognition
-- Users can confirm or reject recognition results
-- Confirmed albums are stored for later processing
-- Rejected albums allow for manual correction
-- Preview integrates seamlessly with existing chat flow
-- Clear visual distinction between preview and regular messages
+- Collection status appears in chat after album queries
+- Status integrates seamlessly with existing message flow
+- Users can see detailed collection information
+- Clear visual distinction between owned and not owned albums
+- Provides context for collection management decisions
+- Maintains chat conversation flow and history
 
 ### Phase 4: Enhanced Chat Experience (SAVED FOR LATER)
 
@@ -260,7 +265,9 @@ The project already has a solid foundation with:
 ## Success Criteria
 - Chat interface provides a natural, intuitive messaging experience
 - Messages are properly displayed with clear visual distinction between user and agent
-- Dummy endpoint successfully returns responses to user messages
+- Agent can parse user messages to extract album and artist information
+- Collection queries return accurate information about album ownership
+- Agent provides helpful responses about collection status
 - Interface works seamlessly on both desktop and mobile devices
 - Chat history persists across page refreshes
 - Error handling is robust and user-friendly
@@ -268,6 +275,5 @@ The project already has a solid foundation with:
 - Image upload functionality works on both mobile and desktop
 - Images are properly stored and displayed in chat
 - File validation prevents invalid uploads
-- Album recognition accurately identifies album covers using GPT-4V
-- Recognized album metadata is properly displayed and confirmed
-- Album preview component provides clear confirmation interface
+- Collection status is clearly displayed with relevant details
+- Natural language processing accurately extracts album information from various input formats

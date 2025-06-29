@@ -36,17 +36,31 @@ export interface Collection extends SupabaseDbEntry {
 }
 
 // Chat Message Types
-export interface ChatMessage {
+export interface ChatMessage extends SupabaseDbEntry {
+  content: string;
+  sender: 'user' | 'agent';
+  timestamp: Date;
+  type: 'text' | 'image' | 'collection_status';
+  imageUrl?: string;
+  imageFile?: File;
+  data?: any; // For collection query results
+}
+
+// Chat Message Type for the chat interface (with string IDs)
+export interface ChatMessageType {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'collection_status';
   imageUrl?: string;
   imageFile?: File;
+  data?: any; // For collection query results
 }
 
 export interface ChatResponse {
   message: string;
   timestamp: string;
+  type?: 'general' | 'collection_query' | 'error';
+  data?: any;
 }

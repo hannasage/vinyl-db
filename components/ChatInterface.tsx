@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
-import { ChatMessage as ChatMessageType, ChatResponse } from '../data/types';
+import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 
 interface ChatInterfaceProps {
@@ -123,7 +123,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         content: response.message,
         sender: 'agent',
         timestamp: new Date(response.timestamp),
-        type: 'text'
+        type: response.type === 'collection_query' ? 'collection_status' : 'text',
+        data: response.data
       };
 
       setMessages(prev => [...prev, agentMessage]);
