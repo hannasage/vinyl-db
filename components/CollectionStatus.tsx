@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 interface Album {
   id: number;
@@ -42,7 +43,7 @@ export default function CollectionStatus({
           <h3 className="text-lg font-semibold text-red-800">Not in Collection</h3>
         </div>
         <p className="text-red-700 mb-2">
-          {message || `"${albumName}" by ${artistName}" is not in your collection.`}
+          {message || `&quot;${albumName}&quot; by ${artistName} is not in your collection.`}
         </p>
         <div className="text-sm text-red-600">
           💡 Try checking the spelling or try a different search term.
@@ -68,9 +69,11 @@ export default function CollectionStatus({
           {/* Album Artwork */}
           <div className="flex-shrink-0">
             {hasArtwork ? (
-              <img
-                src={album.artwork_url}
+              <Image
+                src={album.artwork_url!}
                 alt={`${album.title} by ${album.artist_name}`}
+                width={64}
+                height={64}
                 className="w-16 h-16 object-cover rounded-lg shadow-sm"
               />
             ) : (
@@ -95,7 +98,7 @@ export default function CollectionStatus({
                 <p>Variant: {album.variant}</p>
               )}
               {album.size && (
-                <p>Size: {album.size}"</p>
+                <p>Size: {album.size}&quot;</p>
               )}
               {album.purchase_date && (
                 <p>Purchased: {new Date(album.purchase_date).toLocaleDateString()}</p>
@@ -124,11 +127,11 @@ export default function CollectionStatus({
       </div>
       
       <p className="text-blue-700 mb-3">
-        {message || `Found ${albums.length} albums matching "${albumName}" by ${artistName}":`}
+        {message || `Found ${albums.length} albums matching &quot;${albumName}&quot; by ${artistName}:`}
       </p>
       
       <div className="space-y-3">
-        {albums.map((album, index) => {
+        {albums.map((album) => {
           const hasArtwork = album.artwork_url && album.artwork_url.trim() !== '';
           
           return (
@@ -136,9 +139,11 @@ export default function CollectionStatus({
               {/* Album Artwork */}
               <div className="flex-shrink-0">
                 {hasArtwork ? (
-                  <img
-                    src={album.artwork_url}
+                  <Image
+                    src={album.artwork_url!}
                     alt={`${album.title} by ${album.artist_name}`}
+                    width={48}
+                    height={48}
                     className="w-12 h-12 object-cover rounded shadow-sm"
                   />
                 ) : (

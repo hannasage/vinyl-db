@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import { ChatMessageType, ChatResponse } from '../data/types';
@@ -219,9 +220,11 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           {/* If image selected, show thumbnail */}
           {selectedImageUrl && (
             <div className="relative mr-2">
-              <img
+              <Image
                 src={selectedImageUrl}
                 alt="Selected"
+                width={40}
+                height={40}
                 className="w-10 h-10 object-cover rounded-lg border border-gray-300"
               />
               <button

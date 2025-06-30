@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import CollectionStatus from './CollectionStatus';
 
 export interface ChatMessageProps {
@@ -37,9 +38,11 @@ export default function ChatMessage({
         {/* Image Display */}
         {type === 'image' && imageUrl && (
           <div className="mb-2">
-            <img
+            <Image
               src={imageUrl}
               alt="Uploaded content"
+              width={320}
+              height={128}
               className="w-full h-32 object-cover rounded-lg"
             />
           </div>
