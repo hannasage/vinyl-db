@@ -218,9 +218,9 @@ The project already has a solid foundation with:
 - Provides context for collection management decisions
 - Maintains chat conversation flow and history
 
-### Phase 4: CRUD Operations & Multi-Step Agent
+### Phase 4: CRUD Operations & Multi-Step Agent ✅ COMPLETED
 
-**Prompt 1: Design multi-step agent execution framework**
+**Prompt 1: Design multi-step agent execution framework** ✅
 "Enhance the chat-response endpoint to support multi-step agent execution. Allow the agent to plan and execute multiple tool calls in sequence for complex operations like batch album management."
 
 **Acceptance Criteria:**
@@ -231,7 +231,7 @@ The project already has a solid foundation with:
 - Error handling that can rollback or continue partial operations
 - Clear communication of multi-step progress to user
 
-**Prompt 2: Create add album tool and endpoint**
+**Prompt 2: Create add album tool and endpoint** ✅
 "Create a new Supabase Edge Function called `add-album` that adds albums to the user's collection. Handle artist creation if needed and validate input data."
 
 **Acceptance Criteria:**
@@ -243,7 +243,7 @@ The project already has a solid foundation with:
 - Returns structured response with created album details
 - Proper error handling and rollback on failures
 
-**Prompt 3: Create remove album tool and endpoint**
+**Prompt 3: Create remove album tool and endpoint** ✅
 "Create a new Supabase Edge Function called `remove-album` that removes albums from the user's collection. Handle cleanup of orphaned artists if needed."
 
 **Acceptance Criteria:**
@@ -255,7 +255,7 @@ The project already has a solid foundation with:
 - Returns structured response with deletion status
 - Proper error handling for non-existent albums
 
-**Prompt 4: Update agent to handle batch operations**
+**Prompt 4: Update agent to handle batch operations** ✅
 "Enhance the agent's message parsing to detect batch operations like 'add these albums to my library' or 'do I have these albums?' and plan appropriate multi-step execution."
 
 **Acceptance Criteria:**
@@ -266,7 +266,7 @@ The project already has a solid foundation with:
 - Summarizes results of batch operations
 - Graceful handling of partial failures in batch operations
 
-**Prompt 5: Create album management interface components**
+**Prompt 5: Create album management interface components** ✅
 "Build components for album addition/removal confirmation and batch operation progress tracking. Integrate these into the chat flow."
 
 **Acceptance Criteria:**
@@ -277,7 +277,104 @@ The project already has a solid foundation with:
 - Confirmation dialogs for destructive operations
 - Progress indicators for long-running batch operations
 
-### Phase 5: Enhanced Chat Experience (SAVED FOR LATER)
+### Phase 5: Model Context Protocol (MCP) Integration
+
+**Prompt 1: Research and plan MCP implementation** ✅
+"Research the Model Context Protocol specification and plan how to integrate it with Supabase. Understand MCP server requirements, tool definitions, and how to expose vinyl collection tools through the MCP interface."
+
+**Acceptance Criteria:**
+- MCP specification is understood and documented
+- Plan for MCP server implementation is created
+- Tool definitions are mapped from current custom interface to MCP format
+- Integration strategy with Supabase Edge Functions is defined
+- Migration path from custom tools to MCP tools is outlined
+- Documentation of MCP benefits and trade-offs is created
+
+**Prompt 2: Create MCP server for vinyl collection tools** ✅
+"Implement an MCP server that exposes the vinyl collection management tools (query, add, remove) using the MCP protocol. The server should run as a Supabase Edge Function and handle MCP tool discovery and execution."
+
+**Acceptance Criteria:**
+- MCP server exists at `supabase/functions/mcp-server/index.ts`
+- Server implements MCP protocol for tool discovery
+- Tools are defined using MCP's standardized schema
+- Server handles MCP tool calls and responses
+- Integration with existing Supabase database and auth
+- Proper error handling and logging for MCP operations
+- CORS and security headers configured for MCP protocol
+
+**Prompt 3: Convert existing tools to MCP format** ✅
+"Convert the existing custom tool definitions (collection_query, add_album, remove_album) to MCP-compliant tool schemas. Update tool parameters, descriptions, and execution logic to follow MCP standards."
+
+**Acceptance Criteria:**
+- MCP tool schemas are defined for all vinyl collection operations
+- Tool parameters follow MCP JSON Schema format
+- Tool descriptions are standardized and comprehensive
+- Execution logic is adapted to MCP call/response format
+- Tool validation and error handling follows MCP standards
+- Backward compatibility with existing database operations
+- TypeScript types are updated for MCP tool definitions
+
+**Prompt 4: Update chat-response to use MCP client** ✅
+"Modify the chat-response Edge Function to use an MCP client instead of direct tool execution. Replace the custom tool registry and GPT-based tool selection with MCP-compliant tool discovery and execution."
+
+**Acceptance Criteria:**
+- Chat-response function uses MCP client for tool operations
+- MCP tool discovery replaces custom tool registry
+- GPT prompts are updated to work with MCP tool schemas
+- Multi-step operations use MCP tool calls
+- Error handling is adapted for MCP protocol
+- Response formatting works with MCP tool results
+- Fallback mechanisms for MCP connection issues
+
+**Prompt 5: Implement MCP resource management**
+"Add MCP resource management for vinyl collection data. Implement proper resource creation, reading, updating, and deletion through the MCP protocol for albums, artists, and collection entries."
+
+**Acceptance Criteria:**
+- MCP resources are defined for vinyl collection entities
+- Resource URIs follow MCP naming conventions
+- CRUD operations are exposed through MCP resources
+- Resource metadata includes proper MCP attributes
+- Resource relationships are properly modeled
+- Resource access control integrates with Supabase auth
+- Resource operations are atomic and consistent
+
+**Prompt 6: Create MCP client integration** ✅
+"Build an MCP client that can connect to the MCP server and handle tool calls. Integrate this client into the chat-response function and ensure proper connection management."
+
+**Acceptance Criteria:**
+- MCP client exists and can connect to MCP server
+- Client handles tool discovery and execution
+- Connection management includes retry logic and error handling
+- Client integrates seamlessly with existing chat flow
+- Performance is optimized for MCP operations
+- Client supports both single and batch tool calls
+- Proper logging and debugging for MCP operations
+
+**Prompt 7: Test and validate MCP integration**
+"Create comprehensive tests for the MCP integration. Test tool discovery, execution, error handling, and performance. Validate that MCP tools work correctly with the existing vinyl collection database."
+
+**Acceptance Criteria:**
+- Unit tests exist for MCP server and client
+- Integration tests validate MCP tool execution
+- Performance tests ensure MCP operations are efficient
+- Error scenarios are tested and handled properly
+- MCP tools produce correct results for all operations
+- Backward compatibility with existing functionality
+- Documentation of MCP integration is complete
+
+**Prompt 8: Update frontend for MCP compatibility**
+"Update the frontend chat interface to work with the new MCP-based backend. Ensure that all existing functionality continues to work while leveraging the benefits of MCP standardization."
+
+**Acceptance Criteria:**
+- Frontend continues to work with MCP backend
+- Chat interface handles MCP tool responses correctly
+- Error handling works with MCP error formats
+- Loading states and progress indicators work properly
+- Message types and data structures are compatible
+- User experience remains smooth and responsive
+- No breaking changes to existing UI/UX
+
+### Phase 6: Enhanced Chat Experience (SAVED FOR LATER)
 
 **Prompt 6: Add message timestamps and styling**
 "Enhance the chat messages with timestamps, better styling, and message status indicators (sent, delivered, etc.). Add smooth animations for new messages appearing and improve the overall visual polish of the chat interface."
@@ -291,7 +388,7 @@ The project already has a solid foundation with:
 **Prompt 9: Enhance input field functionality**
 "Improve the chat input field with features like Enter key to send, Shift+Enter for new lines, character count, and input validation. Add a send button that's disabled when the input is empty."
 
-### Phase 5: Chat Interface Polish (SAVED FOR LATER)
+### Phase 7: Chat Interface Polish (SAVED FOR LATER)
 
 **Prompt 10: Add welcome message and instructions**
 "Display a welcome message when the chat loads, explaining how to use the interface. Add helpful instructions and example messages that users can click to send."
@@ -305,7 +402,7 @@ The project already has a solid foundation with:
 **Prompt 13: Implement message search**
 "Add a search functionality to find specific messages in the chat history. Include a search input in the header and highlight matching text in messages."
 
-### Phase 6: Mobile Optimization (SAVED FOR LATER)
+### Phase 8: Mobile Optimization (SAVED FOR LATER)
 
 **Prompt 14: Optimize for mobile devices**
 "Ensure the chat interface works seamlessly on mobile devices. Add touch-friendly interactions, responsive design, and mobile-specific UI improvements. Test on various screen sizes and add proper viewport handling."
@@ -313,7 +410,7 @@ The project already has a solid foundation with:
 **Prompt 15: Add mobile-specific features**
 "Implement mobile-specific features like swipe gestures, pull-to-refresh, and better keyboard handling. Add a floating action button for quick actions on mobile."
 
-### Phase 7: Testing and Documentation (SAVED FOR LATER)
+### Phase 9: Testing and Documentation (SAVED FOR LATER)
 
 **Prompt 16: Add comprehensive testing**
 "Create unit tests for chat components, integration tests for the chat endpoint, and basic end-to-end tests for the chat flow. Set up testing framework and ensure good test coverage."
@@ -342,3 +439,11 @@ The project already has a solid foundation with:
 - Batch operations handle multiple albums in single commands
 - Progress tracking provides clear feedback during multi-step operations
 - Album management interface provides confirmation and progress indicators
+- MCP integration provides standardized tool interface
+- MCP tools follow protocol specifications and best practices
+- MCP server handles tool discovery and execution properly
+- MCP client integrates seamlessly with existing chat flow
+- MCP resources are properly managed and accessible
+- MCP integration maintains backward compatibility
+- Performance is optimized for MCP operations
+- Comprehensive testing validates MCP functionality

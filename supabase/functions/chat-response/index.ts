@@ -2,126 +2,194 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import OpenAI from 'npm:openai@4.20.1'
 
-// Tool interface for extensibility
-interface Tool {
+// MCP Client Types
+interface MCPTool {
   name: string;
   description: string;
-  parameters: any;
-  execute: (params: any, supabase: any) => Promise<any>;
+  inputSchema: {
+    type: string;
+    properties: Record<string, any>;
+    required?: string[];
+  };
 }
 
-// Multi-step execution plan interface
-interface ExecutionStep {
+interface MCPToolCall {
+  name: string;
+  arguments: Record<string, any>;
+}
+
+// MCP Client Class (simplified for Edge Function)
+class MCPClient {
+  private serverUrl: string;
+  private requestId = 0;
+  private tools: MCPTool[] = [];
+  private initialized = false;
+
+  constructor(serverUrl: string) {
+    this.serverUrl = serverUrl;
+  }
+
+  private generateRequestId(): string {
+    return `req_${Date.now()}_${++this.requestId}`;
+  }
+
+  private async makeRequest(request: any, authToken?: string): Promise<any> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(this.serverUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async initialize(authToken?: string): Promise<void> {
+    console.log('[MCP Client] Initializing connection to MCP server');
+    
+    const request = {
+      jsonrpc: '2.0',
+      id: this.generateRequestId(),
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {
+          tools: {},
+          resources: {
+            listChanged: false
+          }
+        },
+        clientInfo: {
+          name: 'vinyl-agent-mcp-client',
+          version: '1.0.0'
+        }
+      }
+    };
+
+    const response = await this.makeRequest(request, authToken);
+    
+    if (response.error) {
+      throw new Error(`MCP initialization failed: ${response.error.message}`);
+    }
+
+    console.log('[MCP Client] Successfully initialized MCP connection');
+    this.initialized = true;
+  }
+
+  async discoverTools(authToken?: string): Promise<MCPTool[]> {
+    if (!this.initialized) {
+      await this.initialize(authToken);
+    }
+
+    console.log('[MCP Client] Discovering available tools');
+    
+    const request = {
+      jsonrpc: '2.0',
+      id: this.generateRequestId(),
+      method: 'tools/list'
+    };
+
+    const response = await this.makeRequest(request, authToken);
+    
+    if (response.error) {
+      throw new Error(`Tool discovery failed: ${response.error.message}`);
+    }
+
+    this.tools = response.result?.tools || [];
+    console.log('[MCP Client] Discovered tools:', this.tools.map(t => t.name));
+    
+    return this.tools;
+  }
+
+  async executeTool(toolName: string, parameters: Record<string, any>, authToken?: string): Promise<any> {
+    if (!this.initialized) {
+      await this.initialize(authToken);
+    }
+
+    console.log('[MCP Client] Calling tool:', toolName, 'with args:', parameters);
+    
+    const request = {
+      jsonrpc: '2.0',
+      id: this.generateRequestId(),
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: parameters
+      }
+    };
+
+    const response = await this.makeRequest(request, authToken);
+    
+    if (response.error) {
+      throw new Error(`Tool call failed: ${response.error.message}`);
+    }
+
+    const result = response.result;
+    console.log('[MCP Client] Tool call successful:', toolName);
+    
+    // Parse result
+    try {
+      const textContent = result.content.find((c: any) => c.type === 'text');
+      if (textContent) {
+        return JSON.parse(textContent.text);
+      }
+      return result;
+    } catch (error) {
+      console.warn('[MCP Client] Failed to parse tool result as JSON, returning raw result');
+      return result;
+    }
+  }
+
+  getCachedTools(): MCPTool[] {
+    return [...this.tools];
+  }
+
+  hasTool(toolName: string): boolean {
+    return this.tools.some(tool => tool.name === toolName);
+  }
+}
+
+// Operation interface
+interface Operation {
   tool: string;
   parameters: any;
   description: string;
 }
 
-interface ExecutionPlan {
-  steps: ExecutionStep[];
-  summary: string;
-  estimatedSteps: number;
-}
-
-// Collection Query Tool
-const collectionQueryTool: Tool = {
-  name: 'collection_query',
-  description: 'Query the user\'s vinyl collection for albums by artist, album name, or both',
-  parameters: {
-    albumName: 'string (optional)',
-    artistName: 'string (optional)'
-  },
-  execute: async (params: any, supabase: any) => {
-    const { albumName, artistName } = params;
-    const { data, error } = await supabase.functions.invoke('query-collection', {
-      body: { albumName, artistName }
-    });
-    if (error) {
-      throw error;
-    }
-    return data;
-  }
-};
-
-// Add Album Tool
-const addAlbumTool: Tool = {
-  name: 'add_album',
-  description: 'Add a new album to the user\'s vinyl collection',
-  parameters: {
-    albumName: 'string',
-    artistName: 'string',
-    releaseYear: 'number (optional)',
-    variant: 'string (optional)',
-    purchaseDate: 'string (optional)',
-    acquiredDate: 'string (optional)',
-    preordered: 'boolean (optional)',
-    artworkUrl: 'string (optional)',
-    size: 'number (optional)'
-  },
-  execute: async (params: any, supabase: any) => {
-    const { data, error } = await supabase.functions.invoke('add-album', {
-      body: params
-    });
-    if (error) {
-      throw error;
-    }
-    return data;
-  }
-};
-
-// Remove Album Tool
-const removeAlbumTool: Tool = {
-  name: 'remove_album',
-  description: 'Remove an album from the user\'s vinyl collection. Can search by album name only, but will ask for artist if multiple matches found.',
-  parameters: {
-    albumId: 'number (optional)',
-    albumName: 'string (optional)',
-    artistName: 'string (optional)'
-  },
-  execute: async (params: any, supabase: any) => {
-    console.log('[chat-response] remove_album tool called with params:', params);
-    const { data, error } = await supabase.functions.invoke('remove-album', {
-      body: params
-    });
-    console.log('[chat-response] remove_album response:', { data, error });
-    if (error) {
-      console.error('[chat-response] remove_album error:', error);
-      throw error;
-    }
-    return data;
-  }
-};
-
-// Tool registry for easy extension
-const tools: Record<string, Tool> = {
-  collection_query: collectionQueryTool,
-  add_album: addAlbumTool,
-  remove_album: removeAlbumTool
-};
-
-// Function to plan multi-step operations using GPT
-async function planMultiStepOperation(message: string): Promise<ExecutionPlan | null> {
+// Function to plan operations using GPT (returns array of operations)
+async function planOperations(message: string, mcpTools: MCPTool[]): Promise<Operation[]> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
-      return null;
+      return [];
     }
 
     const openai = new OpenAI({
       apiKey: openaiApiKey,
     });
 
-    // Build tool descriptions dynamically
-    const toolDescriptions = Object.values(tools).map(tool => 
+    // Build tool descriptions from MCP tools
+    const toolDescriptions = mcpTools.map(tool => 
       `- "${tool.name}": ${tool.description}`
     ).join('\n');
 
-    const systemPrompt = `You are a helpful assistant that plans multi-step operations for vinyl collection management.
+    const systemPrompt = `You are a helpful assistant that plans operations for vinyl collection management.
 
 Your job is to:
-1. Analyze if the user's request requires multiple steps
+1. Analyze the user's request
 2. Break down complex operations into sequential tool calls
-3. Create an execution plan with clear steps
+3. Create an array of operations to execute
 
 Available tools:
 ${toolDescriptions}
@@ -132,40 +200,26 @@ Multi-step scenarios to detect:
 - Batch removals: "Remove these albums from my collection: [list]"
 - Complex queries: "Check if I have any Pink Floyd or Beatles albums"
 
-IMPORTANT: Use exact parameter names as defined in the tool descriptions:
-- collection_query: albumName (optional), artistName (optional)
-- add_album: albumName, artistName, releaseYear (optional), variant (optional), purchaseDate (optional), acquiredDate (optional), preordered (optional), artworkUrl (optional), size (optional)
-- remove_album: albumId (optional), albumName (optional), artistName (optional) - can work with just albumName, will handle multiple matches gracefully
+IMPORTANT: Use exact tool names as defined in the tool descriptions:
+- vinyl_collection_query: Query vinyl collection
+- vinyl_add_album: Add album to collection
+- vinyl_remove_album: Remove album from collection
 
 Response format (JSON only):
 {
-  "isMultiStep": true/false,
-  "plan": {
-    "steps": [
-      {
-        "tool": "tool_name",
-        "parameters": { /* tool parameters with exact names */ },
-        "description": "What this step does"
-      }
-    ],
-    "summary": "Brief description of the overall operation",
-    "estimatedSteps": number
-  }
-}
-
-If the request is simple (single tool call), return:
-{
-  "isMultiStep": false,
-  "plan": null
+  "operations": [
+    {
+      "tool": "tool_name",
+      "parameters": { /* tool parameters */ },
+      "description": "What this operation does"
+    }
+  ]
 }
 
 Examples:
-- "Do I have Dark Side of the Moon?" → {"isMultiStep": false, "plan": null}
-- "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}], "summary": "Check collection status for multiple albums", "estimatedSteps": 2 }}
-- "Do I have any Pink Floyd albums?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "description": "Check for albums by Pink Floyd"}], "summary": "Check collection status for Pink Floyd albums", "estimatedSteps": 1 }}
-- "Add these albums to my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"isMultiStep": true, "plan": { "steps": [{"tool": "add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd"}, {"tool": "add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles"}], "summary": "Add multiple albums to collection", "estimatedSteps": 2 }}
-- "Remove these albums from my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"isMultiStep": true, "plan": { "steps": [{"tool": "remove_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Remove Dark Side of the Moon by Pink Floyd"}, {"tool": "remove_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Remove Abbey Road by The Beatles"}], "summary": "Remove multiple albums from collection", "estimatedSteps": 2 }}
-- "Remove these albums: Census Designated, Frailty, Revengeseekerz" → {"isMultiStep": true, "plan": { "steps": [{"tool": "remove_album", "parameters": {"albumName": "Census Designated"}, "description": "Remove Census Designated"}, {"tool": "remove_album", "parameters": {"albumName": "Frailty"}, "description": "Remove Frailty"}, {"tool": "remove_album", "parameters": {"albumName": "Revengeseekerz"}, "description": "Remove Revengeseekerz"}], "summary": "Remove multiple albums from collection", "estimatedSteps": 3 }}
+- "Do I have Dark Side of the Moon?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}]}
+- "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "vinyl_collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}]}
+- "Add these albums to my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd"}, {"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles"}]}
 
 Only return JSON, no other text.`;
 
@@ -182,163 +236,67 @@ Only return JSON, no other text.`;
     const content = completion.choices[0]?.message?.content;
     
     if (!content) {
-      return null;
+      return [];
     }
 
     const parsed = JSON.parse(content);
     
-    if (parsed.isMultiStep && parsed.plan) {
-      return parsed.plan;
+    if (parsed.operations && Array.isArray(parsed.operations)) {
+      return parsed.operations;
     }
 
-    return null;
+    return [];
   } catch (error) {
-    console.error('Error planning multi-step operation:', error);
-    return null;
+    console.error('Error planning operations:', error);
+    return [];
   }
 }
 
-// Function to execute a single step
-async function executeStep(step: ExecutionStep, supabase: any, userMessage: string) {
-  console.log(`[chat-response] Executing step: ${step.tool} with params:`, step.parameters);
+// Function to execute a single operation
+async function executeOperation(operation: Operation, mcpClient: MCPClient, authToken: string): Promise<{success: boolean, result: any, error?: string}> {
+  console.log(`[chat-response] Executing operation: ${operation.tool} with params:`, operation.parameters);
   
-  const tool = tools[step.tool];
-  
-  if (!tool) {
-    console.error(`[chat-response] Unknown tool: ${step.tool}`);
-    throw new Error(`Unknown tool: ${step.tool}`);
-  }
-
   try {
-    console.log(`[chat-response] Calling tool.execute for ${step.tool}`);
-    const result = await tool.execute(step.parameters, supabase);
-    console.log(`[chat-response] Tool ${step.tool} returned result:`, result);
+    const result = await mcpClient.executeTool(operation.tool, operation.parameters, authToken);
+    console.log(`[chat-response] Tool ${operation.tool} returned result:`, result);
     return {
       success: true,
-      result,
-      step: step.description
+      result
     };
   } catch (error) {
-    console.error(`[chat-response] Step execution error for ${step.tool}:`, error);
+    console.error(`[chat-response] Operation execution error for ${operation.tool}:`, error);
     return {
       success: false,
-      error: error.message,
-      step: step.description
+      result: null,
+      error: error.message
     };
   }
 }
 
-// Function to execute multi-step plan
-async function executeMultiStepPlan(plan: ExecutionPlan, supabase: any, userMessage: string) {
+// Function to execute array of operations
+async function executeOperations(operations: Operation[], mcpClient: MCPClient, authToken: string): Promise<Array<{operation: Operation, success: boolean, result: any, error?: string}>> {
   const results = [];
-  const errors = [];
   
-  for (let i = 0; i < plan.steps.length; i++) {
-    const step = plan.steps[i];
-    console.log(`Executing step ${i + 1}/${plan.steps.length}: ${step.description}`);
+  for (let i = 0; i < operations.length; i++) {
+    const operation = operations[i];
+    console.log(`Executing operation ${i + 1}/${operations.length}: ${operation.description}`);
     
-    const stepResult = await executeStep(step, supabase, userMessage);
+    const result = await executeOperation(operation, mcpClient, authToken);
     
-    if (stepResult.success) {
-      results.push(stepResult);
-    } else {
-      errors.push(stepResult);
-    }
+    results.push({
+      operation,
+      ...result
+    });
   }
   
-  return {
-    completed: results.length,
-    total: plan.steps.length,
-    results,
-    errors,
-    summary: plan.summary
-  };
+  return results;
 }
 
-// Function to format multi-step results
-function formatMultiStepResponse(executionResult: any) {
-  const { completed, total, results, errors, summary } = executionResult;
-  
-  if (errors.length === 0) {
-    // All steps succeeded
-    const successfulResults = results.map(r => r.result).filter(r => r.success !== false);
-    const failedResults = results.map(r => r.result).filter(r => r.success === false);
-    
-    let message = `✅ Completed ${summary}\n\n`;
-    
-    if (successfulResults.length > 0) {
-      message += `**Successful operations:**\n`;
-      successfulResults.forEach(result => {
-        if (result.message) {
-          message += `• ${result.message}\n`;
-        } else if (result.found && result.albums) {
-          result.albums.forEach(album => {
-            message += `• "${album.title}" by ${album.artist_name}\n`;
-          });
-        }
-      });
-    }
-    
-    if (failedResults.length > 0) {
-      message += `\n**Failed operations:**\n`;
-      failedResults.forEach(result => {
-        if (result.message) {
-          message += `• ${result.message}\n`;
-        }
-        // Handle cases where remove-album returns multiple options
-        if (result.options && Array.isArray(result.options)) {
-          message += `  Options: ${result.options.map(opt => `"${opt.title}" by ${opt.artist}`).join(', ')}\n`;
-        }
-      });
-    }
-    
-    return {
-      message,
-      type: 'multi_step_success',
-      data: executionResult
-    };
-  } else {
-    // Some steps failed
-    let message = `⚠️ Partially completed ${summary}\n\n`;
-    message += `✅ Completed: ${completed}/${total} steps\n`;
-    message += `❌ Failed: ${errors.length} steps\n\n`;
-    
-    if (results.length > 0) {
-      message += `**Successful results:**\n`;
-      results.forEach(r => {
-        if (r.result.success !== false) {
-          if (r.result.message) {
-            message += `• ${r.result.message}\n`;
-          } else if (r.result.found && r.result.albums) {
-            r.result.albums.forEach(album => {
-              message += `• "${album.title}" by ${album.artist_name}\n`;
-            });
-          }
-        }
-      });
-    }
-    
-    if (errors.length > 0) {
-      message += `\n**Errors:**\n`;
-      errors.forEach(e => {
-        message += `• ${e.step}: ${e.error}\n`;
-        // Handle cases where remove-album returns multiple options
-        if (e.result && e.result.options && Array.isArray(e.result.options)) {
-          message += `  Options: ${e.result.options.map(opt => `"${opt.title}" by ${opt.artist}`).join(', ')}\n`;
-        }
-      });
-    }
-    
-    return {
-      message,
-      type: 'multi_step_partial',
-      data: executionResult
-    };
-  }
-}
-
-// Function to parse user message using GPT and determine tool to use
-async function parseMessageWithGPT(message: string) {
+// Function to format response using GPT
+async function formatResponseWithGPT(
+  originalQuestion: string, 
+  executionResults: Array<{operation: Operation, success: boolean, result: any, error?: string}>
+): Promise<string> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -349,50 +307,54 @@ async function parseMessageWithGPT(message: string) {
       apiKey: openaiApiKey,
     });
 
-    // Build tool descriptions dynamically
-    const toolDescriptions = Object.values(tools).map(tool => 
-      `- "${tool.name}": ${tool.description}`
-    ).join('\n');
+    // Prepare task information for GPT
+    const taskInfo = executionResults.map((execResult, index) => {
+      const status = execResult.success ? '✅' : '❌';
+      const resultSummary = execResult.success ? 
+        (execResult.result.message || JSON.stringify(execResult.result)) : 
+        execResult.error || 'Failed';
+      
+      return `${index + 1}. ${status} ${execResult.operation.description}
+   Tool: ${execResult.operation.tool}
+   Parameters: ${JSON.stringify(execResult.operation.parameters)}
+   Result: ${resultSummary}`;
+    }).join('\n\n');
 
-    const systemPrompt = `You are a helpful assistant that parses user messages about vinyl record collections. 
+    const systemPrompt = `You are a helpful assistant for a vinyl record collection management system. Your job is to format responses to user questions based on the tasks that were executed and their results.
 
-Your job is to:
-1. Determine if the user is asking about their collection
-2. Extract relevant parameters for the appropriate tool
-3. Decide which tool to use
+IMPORTANT GUIDELINES:
+1. Be conversational and natural in your responses
+2. Use emojis sparingly but effectively (✅ for success, ❌ for failure, 🎵 for music-related info)
+3. Format album titles in quotes: "Dark Side of the Moon"
+4. Include artist names when relevant
+5. For collection queries, clearly state what was found or not found
+6. For batch operations, summarize the overall results
+7. If there were errors, explain them clearly but helpfully
+8. Keep responses concise but informative
+9. Don't repeat technical details like tool names or parameters unless necessary
 
-Available tools:
-${toolDescriptions}
+RESPONSE FORMATS:
+- Collection queries: "Yes! You have [album] by [artist]" or "No, you don't have [album] by [artist]"
+- Multiple results: "Found X albums: [list with bullet points]"
+- Add operations: "Successfully added [album] by [artist] to your collection"
+- Remove operations: "Successfully removed [album] by [artist] from your collection"
+- Batch operations: "Completed [operation]: [summary of results]"
+- Errors: "Sorry, I couldn't [action] because [reason]"
 
-Response format (JSON only):
-{
-  "tool": "tool_name",
-  "parameters": {
-    // tool-specific parameters
-  },
-  "confidence": 0.0-1.0,
-  "reasoning": "brief explanation"
-}
+The user asked: "${originalQuestion}"
 
-Examples:
-- "Do I have Dark Side of the Moon by Pink Floyd?" → {"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Clear collection query with both album and artist"}
-- "Do I have any Pink Floyd albums?" → {"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Query for all albums by specific artist"}
-- "Do I have Dark Side of the Moon?" → {"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "confidence": 0.95, "reasoning": "Query for specific album across all artists"}
-- "What Beatles albums do I have?" → {"tool": "collection_query", "parameters": {"artistName": "The Beatles"}, "confidence": 0.95, "reasoning": "Query for all albums by artist"}
-- "Add Dark Side of the Moon by Pink Floyd to my collection" → {"tool": "add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Add album to collection"}
-- "Remove Dark Side of the Moon by Pink Floyd from my collection" → {"tool": "remove_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Remove album from collection"}
-- "Delete Abbey Road from my collection" → {"tool": "remove_album", "parameters": {"albumName": "Abbey Road"}, "confidence": 0.9, "reasoning": "Remove album from collection (artist not specified)"}
-- "Hello" → {"tool": "general", "parameters": {}, "confidence": 0.9, "reasoning": "General greeting"}
-- "What's the weather?" → {"tool": "general", "parameters": {}, "confidence": 0.9, "reasoning": "Not collection related"}`;
+Tasks executed:
+${taskInfo}
+
+Please provide a natural, helpful response based on this information.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
+        { role: 'system', content: systemPrompt }
       ],
-      temperature: 0.1,
-      max_tokens: 200
+      temperature: 0.7,
+      max_tokens: 500
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -401,131 +363,12 @@ Examples:
       throw new Error('No content in OpenAI response');
     }
 
-    // Parse the JSON response
-    const parsed = JSON.parse(content);
-    
-    // Validate the response structure
-    if (!parsed.tool) {
-      throw new Error('No tool specified in GPT response');
-    }
-
-    return parsed;
+    return content.trim();
   } catch (error) {
-    console.error('Error parsing message with GPT:', error);
-    // Fallback to basic detection
-    return {
-      tool: 'general',
-      parameters: {},
-      confidence: 0.0,
-      reasoning: 'GPT parsing failed, falling back to general'
-    };
+    console.error('Error formatting response with GPT:', error);
+    // Fallback to basic formatting
+    return `I processed your request "${originalQuestion}" but encountered an error formatting the response. Please try again.`;
   }
-}
-
-// Function to execute a tool
-async function executeTool(toolName: string, parameters: any, supabase: any, userMessage: string) {
-  const tool = tools[toolName];
-  
-  if (!tool) {
-    throw new Error(`Unknown tool: ${toolName}`);
-  }
-
-  try {
-    return await tool.execute(parameters, supabase);
-  } catch (error) {
-    console.error(`Tool execution error for ${toolName}:`, error);
-    throw error;
-  }
-}
-
-// Function to format remove album response
-function formatRemoveAlbumResponse(result: any) {
-  if (!result.success) {
-    return {
-      message: `❌ ${result.message}`,
-      type: 'remove_album_failed',
-      data: result
-    };
-  }
-
-  return {
-    message: `✅ ${result.message}`,
-    type: 'remove_album_success',
-    data: result
-  };
-}
-
-// Function to format response based on tool result
-function formatToolResponse(toolName: string, result: any) {
-  switch (toolName) {
-    case 'collection_query':
-      return formatCollectionResponse(result);
-    case 'add_album':
-      return formatAddAlbumResponse(result);
-    case 'remove_album':
-      return formatRemoveAlbumResponse(result);
-    default:
-      return {
-        message: 'Tool executed successfully',
-        type: 'tool_result',
-        data: result
-      };
-  }
-}
-
-// Function to format response based on collection query result
-function formatCollectionResponse(queryResult: any) {
-  if (!queryResult.found) {
-    return {
-      message: `❌ ${queryResult.message}`,
-      type: 'collection_query',
-      data: queryResult
-    };
-  }
-
-  const albums = queryResult.albums;
-  if (albums.length === 1) {
-    const album = albums[0];
-    const purchaseInfo = album.purchase_date ? ` (purchased ${album.purchase_date})` : '';
-    const variantInfo = album.variant ? ` - ${album.variant}` : '';
-    
-    return {
-      message: `✅ Yes! You have "${album.title}" by ${album.artist_name}${variantInfo}${purchaseInfo}`,
-      type: 'collection_query',
-      data: queryResult
-    };
-  } else {
-    const albumList = albums.map((album: any) => 
-      `• "${album.title}"${album.variant ? ` (${album.variant})` : ''}`
-    ).join('\n');
-    
-    return {
-      message: `✅ Found ${albums.length} albums matching your query:\n\n${albumList}`,
-      type: 'collection_query',
-      data: queryResult
-    };
-  }
-}
-
-// Function to format add album response
-function formatAddAlbumResponse(result: any) {
-  if (!result.success) {
-    return {
-      message: `❌ ${result.message}`,
-      type: 'add_album_failed',
-      data: result
-    };
-  }
-
-  const album = result.album;
-  const variantInfo = album.variant ? ` (${album.variant})` : '';
-  const yearInfo = album.release_year ? ` (${album.release_year})` : '';
-  
-  return {
-    message: `✅ ${result.message}${variantInfo}${yearInfo}`,
-    type: 'add_album_success',
-    data: result
-  };
 }
 
 Deno.serve(async (req) => {
@@ -571,21 +414,31 @@ Deno.serve(async (req) => {
       mimeType: requestData.mimeType || 'No mime type'
     });
 
-    // First, check if this is a multi-step operation
-    const multiStepPlan = await planMultiStepOperation(userMessage);
+    // Create MCP client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const mcpServerUrl = `${supabaseUrl}/functions/v1/mcp-server`;
+    const mcpClient = new MCPClient(mcpServerUrl);
     
-    if (multiStepPlan) {
-      // Execute multi-step plan
-      console.log('Executing multi-step plan:', multiStepPlan);
-      const executionResult = await executeMultiStepPlan(multiStepPlan, supabase, userMessage);
-      const formattedResponse = formatMultiStepResponse(executionResult);
-      
-      return new Response(JSON.stringify({
-        message: formattedResponse.message,
+    // Get auth token
+    const authToken = req.headers.get('Authorization')?.replace('Bearer ', '');
+    
+    // Discover available tools
+    console.log('[chat-response] Discovering MCP tools...');
+    const mcpTools = await mcpClient.discoverTools(authToken);
+    console.log('[chat-response] Discovered tools:', mcpTools.map(t => t.name));
+
+    // Plan operations (always returns an array)
+    const operations = await planOperations(userMessage, mcpTools);
+    
+    if (operations.length === 0) {
+      // No operations planned - return default response
+      const response = {
+        message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Do I have these albums: Dark Side of the Moon, Abbey Road?'",
         timestamp: new Date().toISOString(),
-        type: formattedResponse.type,
-        data: formattedResponse.data
-      }), {
+        type: 'general'
+      };
+
+      return new Response(JSON.stringify(response), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
@@ -594,59 +447,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Parse the message using GPT for single-step operations
-    const parsedMessage = await parseMessageWithGPT(userMessage);
-    console.log('GPT parsing result:', parsedMessage);
-
-    // Handle based on the determined tool
-    if (parsedMessage.tool && parsedMessage.tool !== 'general' && tools[parsedMessage.tool]) {
-      // Execute the specified tool
-      try {
-        const toolResult = await executeTool(parsedMessage.tool, parsedMessage.parameters, supabase, userMessage);
-        const formattedResponse = formatToolResponse(parsedMessage.tool, toolResult);
-        
-        return new Response(JSON.stringify({
-          message: formattedResponse.message,
-          timestamp: new Date().toISOString(),
-          type: formattedResponse.type,
-          data: formattedResponse.data
-        }), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        });
-      } catch (toolError) {
-        console.error('Tool execution error:', toolError);
-        return new Response(JSON.stringify({
-          message: "Sorry, I encountered an error while processing your request. Please try again.",
-          timestamp: new Date().toISOString(),
-          type: 'error'
-        }), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        });
-      }
-    }
-
-    // Default response for general queries or when GPT parsing fails
-    const response = {
-      message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Do I have these albums: Dark Side of the Moon, Abbey Road?'",
+    // Execute all operations
+    console.log(`Executing ${operations.length} operation(s):`, operations.map(op => op.description));
+    const executionResults = await executeOperations(operations, mcpClient, authToken!, userMessage);
+    
+    // Format response using GPT
+    const formattedMessage = await formatResponseWithGPT(userMessage, executionResults);
+    
+    // Determine response type based on number of operations
+    const responseType = operations.length === 1 ? 'single_step' : 'multi_step';
+    
+    return new Response(JSON.stringify({
+      message: formattedMessage,
       timestamp: new Date().toISOString(),
-      type: 'general'
-    };
-
-    return new Response(JSON.stringify(response), {
+      type: responseType,
+      data: {
+        operations: operations.length,
+        results: executionResults
+      }
+    }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
     });
+
   } catch (err) {
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
