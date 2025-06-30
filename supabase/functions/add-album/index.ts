@@ -36,6 +36,8 @@ Deno.serve(async (req) => {
     const requestData = await req.json().catch(() => ({}));
     const { albumName, artistName, releaseYear, variant, purchaseDate, acquiredDate, preordered, artworkUrl, size } = requestData;
     
+    console.log(`[add-album] Request: albumName="${albumName}", artistName="${artistName}", releaseYear=${releaseYear}, variant="${variant}"`);
+    
     // Validate required parameters
     if (!albumName || !artistName) {
       return new Response(JSON.stringify({
@@ -57,6 +59,7 @@ Deno.serve(async (req) => {
       .ilike('name', artistName);
 
     if (artistQueryError) {
+      console.error(`[add-album] Error querying artist:`, artistQueryError);
       throw artistQueryError;
     }
 
@@ -65,7 +68,7 @@ Deno.serve(async (req) => {
     if (existingArtists && existingArtists.length > 0) {
       // Use existing artist (take the first match)
       artistId = existingArtists[0].id;
-      console.log(`Using existing artist: ${existingArtists[0].name} (ID: ${artistId})`);
+      console.log(`[add-album] Using existing artist: "${existingArtists[0].name}" (ID: ${artistId})`);
     } else {
       // Create new artist
       const { data: newArtist, error: artistCreateError } = await supabase
@@ -75,11 +78,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (artistCreateError) {
+        console.error(`[add-album] Error creating artist:`, artistCreateError);
         throw artistCreateError;
       }
 
       artistId = newArtist.id;
-      console.log(`Created new artist: ${newArtist.name} (ID: ${artistId})`);
+      console.log(`[add-album] Created new artist: "${newArtist.name}" (ID: ${artistId})`);
     }
 
     // Prepare album data
@@ -94,6 +98,8 @@ Deno.serve(async (req) => {
       artwork_url: artworkUrl || null,
       size: size || 12 // Default to 12"
     };
+
+    console.log(`[add-album] Creating album: "${albumName}" (Artist ID: ${artistId})`);
 
     // Create the album
     const { data: newAlbum, error: albumCreateError } = await supabase
@@ -114,8 +120,11 @@ Deno.serve(async (req) => {
       .single();
 
     if (albumCreateError) {
+      console.error(`[add-album] Error creating album:`, albumCreateError);
       throw albumCreateError;
     }
+
+    console.log(`[add-album] Album created successfully (ID: ${newAlbum.id})`);
 
     // Get the artist name for the response
     const { data: artist, error: artistError } = await supabase
@@ -125,6 +134,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (artistError) {
+      console.error(`[add-album] Error fetching artist name:`, artistError);
       throw artistError;
     }
 
@@ -133,9 +143,12 @@ Deno.serve(async (req) => {
       artist_name: artist.name
     };
 
+    const successMessage = `Successfully added "${albumName}" by ${artistName} to your collection`;
+    console.log(`[add-album] Operation completed: ${successMessage}`);
+
     return new Response(JSON.stringify({
       success: true,
-      message: `Successfully added "${albumName}" by ${artistName} to your collection`,
+      message: successMessage,
       album: response
     }), {
       status: 200,
@@ -146,7 +159,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (err) {
-    console.error('Error in add-album:', err);
+    console.error('[add-album] Error:', err);
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
       message: err?.message || 'Unknown error'
