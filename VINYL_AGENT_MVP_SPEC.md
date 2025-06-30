@@ -350,30 +350,6 @@ The project already has a solid foundation with:
 - Client supports both single and batch tool calls
 - Proper logging and debugging for MCP operations
 
-**Prompt 7: Test and validate MCP integration**
-"Create comprehensive tests for the MCP integration. Test tool discovery, execution, error handling, and performance. Validate that MCP tools work correctly with the existing vinyl collection database."
-
-**Acceptance Criteria:**
-- Unit tests exist for MCP server and client
-- Integration tests validate MCP tool execution
-- Performance tests ensure MCP operations are efficient
-- Error scenarios are tested and handled properly
-- MCP tools produce correct results for all operations
-- Backward compatibility with existing functionality
-- Documentation of MCP integration is complete
-
-**Prompt 8: Update frontend for MCP compatibility**
-"Update the frontend chat interface to work with the new MCP-based backend. Ensure that all existing functionality continues to work while leveraging the benefits of MCP standardization."
-
-**Acceptance Criteria:**
-- Frontend continues to work with MCP backend
-- Chat interface handles MCP tool responses correctly
-- Error handling works with MCP error formats
-- Loading states and progress indicators work properly
-- Message types and data structures are compatible
-- User experience remains smooth and responsive
-- No breaking changes to existing UI/UX
-
 ### Phase 6: Enhanced Chat Experience (SAVED FOR LATER)
 
 **Prompt 6: Add message timestamps and styling**

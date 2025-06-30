@@ -26,17 +26,34 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
+    // Check if this is an internal call (from MCP server) or external call
+    const authHeader = req.headers.get('Authorization');
+    const isInternalCall = authHeader?.includes('service_role');
+    
+    // Create appropriate Supabase client
+    let supabase;
+    if (isInternalCall) {
+      // Use service role for internal calls (bypasses RLS)
+      supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { global: { headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` } } }
+      );
+    } else {
+      // Use regular client for external calls (respects RLS)
+      supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader! } } }
+      );
+    }
 
     // Get the request body
     const requestData = await req.json().catch(() => ({}));
     const { albumName, artistName, releaseYear, variant, purchaseDate, acquiredDate, preordered, artworkUrl, size } = requestData;
     
     console.log(`[add-album] Request: albumName="${albumName}", artistName="${artistName}", releaseYear=${releaseYear}, variant="${variant}"`);
+    console.log(`[add-album] Using ${isInternalCall ? 'service role' : 'user authentication'}`);
     
     // Validate required parameters
     if (!albumName || !artistName) {

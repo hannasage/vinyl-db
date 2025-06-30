@@ -160,13 +160,14 @@ const MCP_RESOURCES: Record<string, MCPResource> = {
 };
 
 // Tool Execution Functions
-async function executeVinylCollectionQuery(params: any, supabase: any) {
+async function executeVinylCollectionQuery(params: any, supabase: any, authHeader?: string) {
   const { albumName, artistName } = params;
   
   console.log('[MCP] Executing vinyl_collection_query with params:', params);
   
   const { data, error } = await supabase.functions.invoke('query-collection', {
-    body: { albumName, artistName }
+    body: { albumName, artistName },
+    headers: authHeader ? { 'Authorization': authHeader } : {}
   });
   
   if (error) {
@@ -176,11 +177,19 @@ async function executeVinylCollectionQuery(params: any, supabase: any) {
   return data;
 }
 
-async function executeVinylAddAlbum(params: any, supabase: any) {
+async function executeVinylAddAlbum(params: any, supabase: any, authHeader?: string) {
   console.log('[MCP] Executing vinyl_add_album with params:', params);
   
-  const { data, error } = await supabase.functions.invoke('add-album', {
-    body: params
+  // Create a service role client for internal function calls
+  const serviceRoleClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    { global: { headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` } } }
+  );
+  
+  const { data, error } = await serviceRoleClient.functions.invoke('add-album', {
+    body: params,
+    headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` }
   });
   
   if (error) {
@@ -190,11 +199,19 @@ async function executeVinylAddAlbum(params: any, supabase: any) {
   return data;
 }
 
-async function executeVinylRemoveAlbum(params: any, supabase: any) {
+async function executeVinylRemoveAlbum(params: any, supabase: any, authHeader?: string) {
   console.log('[MCP] Executing vinyl_remove_album with params:', params);
   
-  const { data, error } = await supabase.functions.invoke('remove-album', {
-    body: params
+  // Create a service role client for internal function calls
+  const serviceRoleClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    { global: { headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` } } }
+  );
+  
+  const { data, error } = await serviceRoleClient.functions.invoke('remove-album', {
+    body: params,
+    headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` }
   });
   
   if (error) {
@@ -205,7 +222,7 @@ async function executeVinylRemoveAlbum(params: any, supabase: any) {
 }
 
 // Tool execution mapping
-const TOOL_EXECUTORS: Record<string, (params: any, supabase: any) => Promise<any>> = {
+const TOOL_EXECUTORS: Record<string, (params: any, supabase: any, authHeader?: string) => Promise<any>> = {
   vinyl_collection_query: executeVinylCollectionQuery,
   vinyl_add_album: executeVinylAddAlbum,
   vinyl_remove_album: executeVinylRemoveAlbum
@@ -242,7 +259,7 @@ function handleToolsList(request: MCPRequest): MCPResponse {
   };
 }
 
-async function handleToolsCall(request: MCPRequest, supabase: any): Promise<MCPResponse> {
+async function handleToolsCall(request: MCPRequest, supabase: any, authHeader?: string): Promise<MCPResponse> {
   const { name, arguments: args } = request.params;
   
   console.log('[MCP] Handling tools/call request for tool:', name);
@@ -273,7 +290,7 @@ async function handleToolsCall(request: MCPRequest, supabase: any): Promise<MCPR
     }
     
     // Execute tool
-    const result = await TOOL_EXECUTORS[name](args, supabase);
+    const result = await TOOL_EXECUTORS[name](args, supabase, authHeader);
     
     return {
       jsonrpc: '2.0',
@@ -420,11 +437,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get Authorization header
+    const authHeader = req.headers.get('Authorization');
+    
     // Create Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: authHeader! } } }
     );
 
     // Parse request
@@ -460,7 +480,7 @@ Deno.serve(async (req) => {
         response = handleToolsList(request);
         break;
       case 'tools/call':
-        response = await handleToolsCall(request, supabase);
+        response = await handleToolsCall(request, supabase, authHeader);
         break;
       case 'resources/list':
         response = handleResourcesList(request);
