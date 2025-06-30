@@ -1,15 +1,17 @@
 import React from 'react';
 import Image from 'next/image';
 import CollectionStatus from './CollectionStatus';
+import AlbumAction from './AlbumAction';
+import BatchProgress from './BatchProgress';
 
 export interface ChatMessageProps {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image' | 'collection_status';
+  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress';
   imageUrl?: string;
-  data?: any; // For collection query results
+  data?: any; // For collection query results, album actions, or batch progress
   className?: string;
 }
 
@@ -57,6 +59,34 @@ export default function ChatMessage({
               albumName={data.albumName}
               artistName={data.artistName}
               message={data.message}
+            />
+          </div>
+        )}
+
+        {/* Album Action Display */}
+        {type === 'album_action' && data && (
+          <div className="mb-2">
+            <AlbumAction
+              action={data.action}
+              albumName={data.albumName}
+              artistName={data.artistName}
+              onConfirm={data.onConfirm}
+              onCancel={data.onCancel}
+              isLoading={data.isLoading}
+            />
+          </div>
+        )}
+
+        {/* Batch Progress Display */}
+        {type === 'batch_progress' && data && (
+          <div className="mb-2">
+            <BatchProgress
+              currentStep={data.currentStep}
+              totalSteps={data.totalSteps}
+              currentDescription={data.currentDescription}
+              summary={data.summary}
+              isComplete={data.isComplete}
+              hasErrors={data.hasErrors}
             />
           </div>
         )}

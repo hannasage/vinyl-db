@@ -63,10 +63,10 @@ export interface ChatMessageType {
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image' | 'collection_status';
+  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress';
   imageUrl?: string;
   imageFile?: File;
-  data?: any; // For collection query results
+  data?: any; // For collection query results, album actions, or batch progress
 }
 
 export interface ChatResponse {

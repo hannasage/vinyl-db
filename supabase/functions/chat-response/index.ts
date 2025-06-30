@@ -69,10 +69,34 @@ const addAlbumTool: Tool = {
   }
 };
 
+// Remove Album Tool
+const removeAlbumTool: Tool = {
+  name: 'remove_album',
+  description: 'Remove an album from the user\'s vinyl collection. Can search by album name only, but will ask for artist if multiple matches found.',
+  parameters: {
+    albumId: 'number (optional)',
+    albumName: 'string (optional)',
+    artistName: 'string (optional)'
+  },
+  execute: async (params: any, supabase: any) => {
+    console.log('[chat-response] remove_album tool called with params:', params);
+    const { data, error } = await supabase.functions.invoke('remove-album', {
+      body: params
+    });
+    console.log('[chat-response] remove_album response:', { data, error });
+    if (error) {
+      console.error('[chat-response] remove_album error:', error);
+      throw error;
+    }
+    return data;
+  }
+};
+
 // Tool registry for easy extension
 const tools: Record<string, Tool> = {
   collection_query: collectionQueryTool,
-  add_album: addAlbumTool
+  add_album: addAlbumTool,
+  remove_album: removeAlbumTool
 };
 
 // Function to plan multi-step operations using GPT
@@ -105,11 +129,13 @@ ${toolDescriptions}
 Multi-step scenarios to detect:
 - Batch queries: "Do I have these albums: Dark Side of the Moon, Abbey Road, The Wall?"
 - Batch operations: "Add these albums to my collection: [list]"
+- Batch removals: "Remove these albums from my collection: [list]"
 - Complex queries: "Check if I have any Pink Floyd or Beatles albums"
 
 IMPORTANT: Use exact parameter names as defined in the tool descriptions:
 - collection_query: albumName (optional), artistName (optional)
 - add_album: albumName, artistName, releaseYear (optional), variant (optional), purchaseDate (optional), acquiredDate (optional), preordered (optional), artworkUrl (optional), size (optional)
+- remove_album: albumId (optional), albumName (optional), artistName (optional) - can work with just albumName, will handle multiple matches gracefully
 
 Response format (JSON only):
 {
@@ -138,6 +164,8 @@ Examples:
 - "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}], "summary": "Check collection status for multiple albums", "estimatedSteps": 2 }}
 - "Do I have any Pink Floyd albums?" → {"isMultiStep": true, "plan": { "steps": [{"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "description": "Check for albums by Pink Floyd"}], "summary": "Check collection status for Pink Floyd albums", "estimatedSteps": 1 }}
 - "Add these albums to my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"isMultiStep": true, "plan": { "steps": [{"tool": "add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd"}, {"tool": "add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles"}], "summary": "Add multiple albums to collection", "estimatedSteps": 2 }}
+- "Remove these albums from my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"isMultiStep": true, "plan": { "steps": [{"tool": "remove_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Remove Dark Side of the Moon by Pink Floyd"}, {"tool": "remove_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Remove Abbey Road by The Beatles"}], "summary": "Remove multiple albums from collection", "estimatedSteps": 2 }}
+- "Remove these albums: Census Designated, Frailty, Revengeseekerz" → {"isMultiStep": true, "plan": { "steps": [{"tool": "remove_album", "parameters": {"albumName": "Census Designated"}, "description": "Remove Census Designated"}, {"tool": "remove_album", "parameters": {"albumName": "Frailty"}, "description": "Remove Frailty"}, {"tool": "remove_album", "parameters": {"albumName": "Revengeseekerz"}, "description": "Remove Revengeseekerz"}], "summary": "Remove multiple albums from collection", "estimatedSteps": 3 }}
 
 Only return JSON, no other text.`;
 
@@ -172,21 +200,26 @@ Only return JSON, no other text.`;
 
 // Function to execute a single step
 async function executeStep(step: ExecutionStep, supabase: any, userMessage: string) {
+  console.log(`[chat-response] Executing step: ${step.tool} with params:`, step.parameters);
+  
   const tool = tools[step.tool];
   
   if (!tool) {
+    console.error(`[chat-response] Unknown tool: ${step.tool}`);
     throw new Error(`Unknown tool: ${step.tool}`);
   }
 
   try {
+    console.log(`[chat-response] Calling tool.execute for ${step.tool}`);
     const result = await tool.execute(step.parameters, supabase);
+    console.log(`[chat-response] Tool ${step.tool} returned result:`, result);
     return {
       success: true,
       result,
       step: step.description
     };
   } catch (error) {
-    console.error(`Step execution error for ${step.tool}:`, error);
+    console.error(`[chat-response] Step execution error for ${step.tool}:`, error);
     return {
       success: false,
       error: error.message,
@@ -228,24 +261,34 @@ function formatMultiStepResponse(executionResult: any) {
   
   if (errors.length === 0) {
     // All steps succeeded
-    const albumResults = results.map(r => r.result).filter(r => r.found);
-    const notFound = results.map(r => r.result).filter(r => !r.found);
+    const successfulResults = results.map(r => r.result).filter(r => r.success !== false);
+    const failedResults = results.map(r => r.result).filter(r => r.success === false);
     
     let message = `✅ Completed ${summary}\n\n`;
     
-    if (albumResults.length > 0) {
-      message += `**Found in your collection:**\n`;
-      albumResults.forEach(result => {
-        result.albums.forEach(album => {
-          message += `• "${album.title}" by ${album.artist_name}\n`;
-        });
+    if (successfulResults.length > 0) {
+      message += `**Successful operations:**\n`;
+      successfulResults.forEach(result => {
+        if (result.message) {
+          message += `• ${result.message}\n`;
+        } else if (result.found && result.albums) {
+          result.albums.forEach(album => {
+            message += `• "${album.title}" by ${album.artist_name}\n`;
+          });
+        }
       });
     }
     
-    if (notFound.length > 0) {
-      message += `\n**Not in your collection:**\n`;
-      notFound.forEach(result => {
-        message += `• ${result.message}\n`;
+    if (failedResults.length > 0) {
+      message += `\n**Failed operations:**\n`;
+      failedResults.forEach(result => {
+        if (result.message) {
+          message += `• ${result.message}\n`;
+        }
+        // Handle cases where remove-album returns multiple options
+        if (result.options && Array.isArray(result.options)) {
+          message += `  Options: ${result.options.map(opt => `"${opt.title}" by ${opt.artist}`).join(', ')}\n`;
+        }
       });
     }
     
@@ -263,10 +306,14 @@ function formatMultiStepResponse(executionResult: any) {
     if (results.length > 0) {
       message += `**Successful results:**\n`;
       results.forEach(r => {
-        if (r.result.found) {
-          r.result.albums.forEach(album => {
-            message += `• "${album.title}" by ${album.artist_name}\n`;
-          });
+        if (r.result.success !== false) {
+          if (r.result.message) {
+            message += `• ${r.result.message}\n`;
+          } else if (r.result.found && r.result.albums) {
+            r.result.albums.forEach(album => {
+              message += `• "${album.title}" by ${album.artist_name}\n`;
+            });
+          }
         }
       });
     }
@@ -275,6 +322,10 @@ function formatMultiStepResponse(executionResult: any) {
       message += `\n**Errors:**\n`;
       errors.forEach(e => {
         message += `• ${e.step}: ${e.error}\n`;
+        // Handle cases where remove-album returns multiple options
+        if (e.result && e.result.options && Array.isArray(e.result.options)) {
+          message += `  Options: ${e.result.options.map(opt => `"${opt.title}" by ${opt.artist}`).join(', ')}\n`;
+        }
       });
     }
     
@@ -328,6 +379,9 @@ Examples:
 - "Do I have any Pink Floyd albums?" → {"tool": "collection_query", "parameters": {"artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Query for all albums by specific artist"}
 - "Do I have Dark Side of the Moon?" → {"tool": "collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "confidence": 0.95, "reasoning": "Query for specific album across all artists"}
 - "What Beatles albums do I have?" → {"tool": "collection_query", "parameters": {"artistName": "The Beatles"}, "confidence": 0.95, "reasoning": "Query for all albums by artist"}
+- "Add Dark Side of the Moon by Pink Floyd to my collection" → {"tool": "add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Add album to collection"}
+- "Remove Dark Side of the Moon by Pink Floyd from my collection" → {"tool": "remove_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "confidence": 0.95, "reasoning": "Remove album from collection"}
+- "Delete Abbey Road from my collection" → {"tool": "remove_album", "parameters": {"albumName": "Abbey Road"}, "confidence": 0.9, "reasoning": "Remove album from collection (artist not specified)"}
 - "Hello" → {"tool": "general", "parameters": {}, "confidence": 0.9, "reasoning": "General greeting"}
 - "What's the weather?" → {"tool": "general", "parameters": {}, "confidence": 0.9, "reasoning": "Not collection related"}`;
 
@@ -384,6 +438,23 @@ async function executeTool(toolName: string, parameters: any, supabase: any, use
   }
 }
 
+// Function to format remove album response
+function formatRemoveAlbumResponse(result: any) {
+  if (!result.success) {
+    return {
+      message: `❌ ${result.message}`,
+      type: 'remove_album_failed',
+      data: result
+    };
+  }
+
+  return {
+    message: `✅ ${result.message}`,
+    type: 'remove_album_success',
+    data: result
+  };
+}
+
 // Function to format response based on tool result
 function formatToolResponse(toolName: string, result: any) {
   switch (toolName) {
@@ -391,6 +462,8 @@ function formatToolResponse(toolName: string, result: any) {
       return formatCollectionResponse(result);
     case 'add_album':
       return formatAddAlbumResponse(result);
+    case 'remove_album':
+      return formatRemoveAlbumResponse(result);
     default:
       return {
         message: 'Tool executed successfully',
