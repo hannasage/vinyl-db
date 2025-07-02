@@ -6,6 +6,7 @@ import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
+import { memoryManager } from '../utils/agent/memory';
 
 interface ChatInterfaceProps {
   className?: string;
@@ -18,6 +19,11 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+
+  // Clear memory when component mounts (start fresh)
+  useEffect(() => {
+    memoryManager.clearMessages();
+  }, []);
 
   // Clean up blob URLs when component unmounts
   useEffect(() => {
@@ -101,13 +107,21 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     // Keep the blob URL for the message preview - don't revoke it here
     setSelectedImageUrl(null);
     
+    // Add user message to short-term memory
+    memoryManager.addMessage(userMessage);
+    
     setIsLoading(true);
 
     try {
       const supabase = createClient();
+      
+      // Get conversation context from short-term memory
+      const conversationContext = memoryManager.getConversationContext(10);
+      
       const { data, error } = await supabase.functions.invoke('chat-response', {
         body: { 
           message: userMessage.content,
+          conversationContext: conversationContext,
           hasImage: !!imageFile,
           imageData: imageData,
           mimeType: mimeType
@@ -129,6 +143,9 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       };
 
       setMessages(prev => [...prev, agentMessage]);
+      
+      // Add agent message to short-term memory
+      memoryManager.addMessage(agentMessage);
     } catch (error) {
       console.error('Error calling chat endpoint:', error);
       
@@ -166,6 +183,22 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
 
   return (
     <div className={`flex flex-col h-screen w-full bg-white ${className}`}>
+      {/* Header */}
+      <div className="border-b border-gray-200 p-4 bg-white">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-gray-900">Vinyl Collection Assistant</h1>
+          <button
+            onClick={() => {
+              const test = memoryManager.testMemory();
+              console.log('Memory test:', test);
+            }}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          >
+            Debug Memory
+          </button>
+        </div>
+      </div>
+
       {/* Message List Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
         {messages.length === 0 ? (

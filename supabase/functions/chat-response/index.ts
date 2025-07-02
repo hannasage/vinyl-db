@@ -168,7 +168,7 @@ interface Operation {
 }
 
 // Function to plan operations using GPT (returns array of operations)
-async function planOperations(message: string, mcpTools: MCPTool[]): Promise<Operation[]> {
+async function planOperations(message: string, mcpTools: MCPTool[], conversationContext?: string): Promise<Operation[]> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -188,8 +188,14 @@ async function planOperations(message: string, mcpTools: MCPTool[]): Promise<Ope
 
 Your job is to:
 1. Analyze the user's request
-2. Break down complex operations into sequential tool calls
-3. Create an array of operations to execute
+2. Consider the conversation context to understand references and maintain continuity
+3. Break down complex operations into sequential tool calls
+4. Create an array of operations to execute
+
+${conversationContext ? `CONVERSATION CONTEXT:
+${conversationContext}
+
+Use this context to understand references like "her new album" or "that artist" and maintain conversation continuity.` : ''}
 
 Available tools:
 ${toolDescriptions}
@@ -223,12 +229,28 @@ Examples:
 
 Only return JSON, no other text.`;
 
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation context as user messages if available
+    if (conversationContext) {
+      const contextLines = conversationContext.split('\n').filter(line => line.trim());
+      for (const line of contextLines) {
+        if (line.startsWith('User: ')) {
+          messages.push({ role: 'user', content: line.substring(6) });
+        } else if (line.startsWith('Assistant: ')) {
+          messages.push({ role: 'assistant', content: line.substring(11) });
+        }
+      }
+    }
+
+    // Add the current user message
+    messages.push({ role: 'user', content: message });
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
+      messages,
       temperature: 0.1,
       max_tokens: 500
     });
@@ -295,7 +317,8 @@ async function executeOperations(operations: Operation[], mcpClient: MCPClient, 
 // Function to format response using GPT
 async function formatResponseWithGPT(
   originalQuestion: string, 
-  executionResults: Array<{operation: Operation, success: boolean, result: any, error?: string}>
+  executionResults: Array<{operation: Operation, success: boolean, result: any, error?: string}>,
+  conversationContext?: string
 ): Promise<string> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -332,6 +355,12 @@ IMPORTANT GUIDELINES:
 7. If there were errors, explain them clearly but helpfully
 8. Keep responses concise but informative
 9. Don't repeat technical details like tool names or parameters unless necessary
+10. Maintain conversation continuity and refer back to previous context when appropriate
+
+${conversationContext ? `CONVERSATION CONTEXT:
+${conversationContext}
+
+Use this context to maintain conversation flow and understand references.` : ''}
 
 RESPONSE FORMATS:
 - Collection queries: "Yes! You have [album] by [artist]" or "No, you don't have [album] by [artist]"
@@ -348,11 +377,25 @@ ${taskInfo}
 
 Please provide a natural, helpful response based on this information.`;
 
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation context as messages if available
+    if (conversationContext) {
+      const contextLines = conversationContext.split('\n').filter(line => line.trim());
+      for (const line of contextLines) {
+        if (line.startsWith('User: ')) {
+          messages.push({ role: 'user', content: line.substring(6) });
+        } else if (line.startsWith('Assistant: ')) {
+          messages.push({ role: 'assistant', content: line.substring(11) });
+        }
+      }
+    }
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: systemPrompt }
-      ],
+      messages,
       temperature: 0.7,
       max_tokens: 500
     });
@@ -405,13 +448,15 @@ Deno.serve(async (req) => {
     // Get the request body
     const requestData = await req.json().catch(() => ({}));
     const userMessage = requestData.message || '';
+    const conversationContext = requestData.conversationContext || '';
     
     // Log the received data for debugging
     console.log('Received request data:', {
       message: userMessage,
       hasImage: requestData.hasImage || false,
       imageData: requestData.imageData ? `Base64 data (${requestData.imageData.length} chars)` : 'No image data',
-      mimeType: requestData.mimeType || 'No mime type'
+      mimeType: requestData.mimeType || 'No mime type',
+      contextLength: conversationContext.length
     });
 
     // Create MCP client
@@ -427,8 +472,8 @@ Deno.serve(async (req) => {
     const mcpTools = await mcpClient.discoverTools(authToken);
     console.log('[chat-response] Discovered tools:', mcpTools.map(t => t.name));
 
-    // Plan operations (always returns an array)
-    const operations = await planOperations(userMessage, mcpTools);
+    // Plan operations with conversation context
+    const operations = await planOperations(userMessage, mcpTools, conversationContext);
     
     if (operations.length === 0) {
       // No operations planned - return default response
@@ -452,7 +497,7 @@ Deno.serve(async (req) => {
     const executionResults = await executeOperations(operations, mcpClient, authToken!, userMessage);
     
     // Format response using GPT
-    const formattedMessage = await formatResponseWithGPT(userMessage, executionResults);
+    const formattedMessage = await formatResponseWithGPT(userMessage, executionResults, conversationContext);
     
     // Determine response type based on number of operations
     const responseType = operations.length === 1 ? 'single_step' : 'multi_step';
