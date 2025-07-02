@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
@@ -19,11 +19,17 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Clear memory when component mounts (start fresh)
   useEffect(() => {
     memoryManager.clearMessages();
   }, []);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   // Clean up blob URLs when component unmounts
   useEffect(() => {
@@ -185,17 +191,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     <div className={`flex flex-col h-screen w-full bg-white ${className}`}>
       {/* Header */}
       <div className="border-b border-gray-200 p-4 bg-white">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto">
           <h1 className="text-xl font-semibold text-gray-900">Vinyl Collection Assistant</h1>
-          <button
-            onClick={() => {
-              const test = memoryManager.testMemory();
-              console.log('Memory test:', test);
-            }}
-            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-          >
-            Debug Memory
-          </button>
         </div>
       </div>
 
@@ -232,6 +229,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             </div>
           </div>
         )}
+        {/* Scroll anchor for auto-scrolling */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Error Display */}

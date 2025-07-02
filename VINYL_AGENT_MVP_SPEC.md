@@ -429,58 +429,16 @@ The project already has a solid foundation with:
 - Smart suggestions based on user collection history
 - Clear visual hierarchy for album information display
 
-### Phase 6: Enhanced Chat Experience (SAVED FOR LATER)
 
-**Prompt 6: Add message timestamps and styling**
-"Enhance the chat messages with timestamps, better styling, and message status indicators (sent, delivered, etc.). Add smooth animations for new messages appearing and improve the overall visual polish of the chat interface."
-
-**Prompt 7: Implement typing indicators**
-"Add a typing indicator that shows when the agent is 'thinking' (displayed while waiting for the API response). Create a subtle animation with dots or a typing indicator component that appears below the last message."
-
-**Prompt 8: Add message persistence**
-"Implement basic message persistence using localStorage so that chat history is maintained when the user refreshes the page. Add a function to clear chat history and handle storage limits."
-
-**Prompt 9: Enhance input field functionality**
-"Improve the chat input field with features like Enter key to send, Shift+Enter for new lines, character count, and input validation. Add a send button that's disabled when the input is empty."
-
-### Phase 7: Chat Interface Polish (SAVED FOR LATER)
-
-**Prompt 10: Add welcome message and instructions**
-"Display a welcome message when the chat loads, explaining how to use the interface. Add helpful instructions and example messages that users can click to send."
-
-**Prompt 11: Implement message actions**
-"Add message actions like copy, delete (for user messages), and retry (for failed messages). Include right-click context menus or action buttons that appear on hover."
-
-**Prompt 12: Add chat header and status**
-"Create a chat header that shows the current session status, user information, and any relevant controls. Add a status indicator showing connection status to the backend."
-
-**Prompt 13: Implement message search**
-"Add a search functionality to find specific messages in the chat history. Include a search input in the header and highlight matching text in messages."
-
-### Phase 8: Mobile Optimization (SAVED FOR LATER)
-
-**Prompt 14: Optimize for mobile devices**
-"Ensure the chat interface works seamlessly on mobile devices. Add touch-friendly interactions, responsive design, and mobile-specific UI improvements. Test on various screen sizes and add proper viewport handling."
-
-**Prompt 15: Add mobile-specific features**
-"Implement mobile-specific features like swipe gestures, pull-to-refresh, and better keyboard handling. Add a floating action button for quick actions on mobile."
-
-### Phase 9: Testing and Documentation (SAVED FOR LATER)
-
-**Prompt 16: Add comprehensive testing**
-"Create unit tests for chat components, integration tests for the chat endpoint, and basic end-to-end tests for the chat flow. Set up testing framework and ensure good test coverage."
-
-**Prompt 17: Document the chat system**
-"Create documentation for the chat interface, including component usage, API endpoints, and user guide. Add comments to the code and create a README section for the chat functionality."
 
 ## Success Criteria
-- Chat interface provides a natural, intuitive messaging experience
+- Chat interface provides a natural, intuitive messaging experience with auto-scrolling
 - Messages are properly displayed with clear visual distinction between user and agent
 - Agent can parse user messages to extract album and artist information using AI
 - Collection queries return accurate information about album ownership
 - Agent provides helpful responses about collection status
 - Interface works seamlessly on both desktop and mobile devices
-- Chat history persists across page refreshes
+- Short-term memory maintains conversation context across multiple messages
 - Error handling is robust and user-friendly with AI-powered error messages
 - Performance is optimized for quick message display
 - Image upload functionality works on both mobile and desktop

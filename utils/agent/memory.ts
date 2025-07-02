@@ -71,17 +71,6 @@ export class ConversationMemoryManager {
   getAllMessages(): ConversationMessage[] {
     return [...this.messages];
   }
-
-  /**
-   * Test the memory system (for debugging)
-   */
-  testMemory(): { messageCount: number; context: string; messages: ConversationMessage[] } {
-    return {
-      messageCount: this.getMessageCount(),
-      context: this.getConversationContext(),
-      messages: this.getAllMessages()
-    };
-  }
 }
 
 // Export a singleton instance
