@@ -350,6 +350,85 @@ The project already has a solid foundation with:
 - Client supports both single and batch tool calls
 - Proper logging and debugging for MCP operations
 
+### Phase 6: Human-in-the-Loop Actions
+
+**Prompt 1: Create album details fetching for pending actions**
+"Implement album details fetching when users request add/remove operations. When the agent detects an add/remove request, fetch comprehensive album information (title, artist, release year, artwork, etc.) before showing confirmation. Create a new Edge Function or extend existing ones to fetch album metadata from external APIs."
+
+**Acceptance Criteria:**
+- Album details fetching triggered for add/remove operations
+- Fetches album metadata from external APIs (Discogs, MusicBrainz, etc.)
+- Returns comprehensive album information (title, artist, release year, artwork URL)
+- Handles cases where album details cannot be found
+- Caches album details to avoid duplicate API calls
+- Proper error handling for API failures
+- TypeScript interfaces for album metadata structure
+
+**Prompt 2: Create album confirmation card component**
+"Build an `AlbumConfirmationCard.tsx` component that displays fetched album details in a visually appealing card format. Include album artwork, title, artist, release year, and clear confirm/deny action buttons. Style it to match the chat interface design."
+
+**Acceptance Criteria:**
+- AlbumConfirmationCard component displays album details in card format
+- Shows album artwork prominently (with fallback for missing artwork)
+- Displays album title, artist, and release year clearly
+- Confirm and deny buttons with appropriate styling and colors
+- Loading state while fetching album details
+- Responsive design that works on mobile and desktop
+- Accessibility features (keyboard navigation, screen reader support)
+- Visual feedback for button interactions
+
+**Prompt 3: Update chat response to fetch and return album details**
+"Modify the chat-response Edge Function to detect add/remove operations, fetch album details, and return them as pending confirmation data. Update the response format to include album metadata and confirmation UI instructions."
+
+**Acceptance Criteria:**
+- Chat response detects add/remove operations in user messages
+- Triggers album details fetching before returning response
+- Returns album metadata along with confirmation request
+- Maintains existing functionality for non-destructive operations
+- Clear distinction between immediate and pending operations
+- Proper error handling for album fetching failures
+- Response format includes album details and confirmation instructions
+- GPT prompts updated to identify operations requiring confirmation
+
+**Prompt 4: Integrate album confirmation cards into chat flow**
+"Update the ChatInterface to handle album confirmation messages and display the album confirmation cards. Connect the confirmation flow to execute the actual add/remove operations when confirmed."
+
+**Acceptance Criteria:**
+- Album confirmation cards appear as special message types in chat
+- Cards are displayed inline with messages in the chat flow
+- User can confirm or deny album operations via card buttons
+- Successful confirmations execute the actual add/remove operation
+- Denied operations are removed from pending state
+- Clear feedback for all action outcomes (success, failure, cancellation)
+- Error handling for failed confirmations or operations
+- Integration with existing MCP tool execution system
+
+**Prompt 5: Add batch album confirmation support**
+"Extend the album confirmation system to handle batch operations. When users request multiple albums, fetch details for each and display them in a batch confirmation interface with individual confirm/deny options."
+
+**Acceptance Criteria:**
+- Batch operations fetch details for multiple albums
+- Displays multiple album confirmation cards in sequence
+- Individual confirm/deny options for each album
+- Bulk confirm/deny options for efficiency
+- Progress tracking for batch operations
+- Clear summary of batch operation results
+- Error handling for partial batch failures
+- Visual indication of batch vs individual operations
+
+**Prompt 6: Enhance album confirmation UX**
+"Add user experience improvements to the album confirmation system. Include confidence indicators, smart defaults for trusted artists, and better visual feedback for the confirmation process."
+
+**Acceptance Criteria:**
+- Confidence indicators for album matching accuracy
+- Option to skip confirmation for trusted artists/albums
+- Visual indicators for operation type (add vs remove)
+- Improved error messages with album suggestions
+- Keyboard shortcuts for common actions (confirm/deny)
+- User preference settings for confirmation behavior
+- Smart suggestions based on user collection history
+- Clear visual hierarchy for album information display
+
 ### Phase 6: Enhanced Chat Experience (SAVED FOR LATER)
 
 **Prompt 6: Add message timestamps and styling**
@@ -423,3 +502,16 @@ The project already has a solid foundation with:
 - MCP integration maintains backward compatibility
 - Performance is optimized for MCP operations
 - Comprehensive testing validates MCP functionality
+- Users must explicitly confirm album additions and removals before execution
+- Album details are fetched and displayed in confirmation cards before user action
+- Album confirmation cards show artwork, title, artist, and release year clearly
+- Confirmation cards are displayed inline in the chat flow with confirm/deny buttons
+- Batch operations fetch details for multiple albums and display individual cards
+- Album metadata fetching integrates with external APIs (Discogs, MusicBrainz, etc.)
+- Confirmation cards are accessible and user-friendly with proper styling
+- System maintains performance with album details caching and efficient fetching
+- Error handling provides clear feedback for failed album fetching or operations
+- Users can customize confirmation preferences for trusted artists/albums
+- All destructive operations require explicit user consent via confirmation cards
+- Human-in-the-loop system prevents accidental collection modifications
+- Album confirmation flow integrates seamlessly with existing MCP tool execution
