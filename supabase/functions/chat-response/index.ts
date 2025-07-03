@@ -333,9 +333,31 @@ async function formatResponseWithGPT(
     // Prepare task information for GPT
     const taskInfo = executionResults.map((execResult, index) => {
       const status = execResult.success ? '✅' : '❌';
-      const resultSummary = execResult.success ? 
-        (execResult.result.message || JSON.stringify(execResult.result)) : 
-        execResult.error || 'Failed';
+      let resultSummary = '';
+      
+      if (execResult.success) {
+        if (execResult.result.message) {
+          resultSummary = execResult.result.message;
+          
+          // For collection queries, include detailed album information
+          if (execResult.operation.tool === 'vinyl_collection_query' && execResult.result.albums) {
+            resultSummary += '\n   Albums found:';
+            execResult.result.albums.forEach((album: any, albumIndex: number) => {
+              resultSummary += `\n   ${albumIndex + 1}. "${album.title}" by ${album.artist_name}`;
+              if (album.variant) {
+                resultSummary += ` (${album.variant})`;
+              }
+              if (album.release_year) {
+                resultSummary += ` [${album.release_year}]`;
+              }
+            });
+          }
+        } else {
+          resultSummary = JSON.stringify(execResult.result);
+        }
+      } else {
+        resultSummary = execResult.error || 'Failed';
+      }
       
       return `${index + 1}. ${status} ${execResult.operation.description}
    Tool: ${execResult.operation.tool}
@@ -343,28 +365,28 @@ async function formatResponseWithGPT(
    Result: ${resultSummary}`;
     }).join('\n\n');
 
-    const systemPrompt = `You are a helpful assistant for a vinyl record collection management system. Your job is to format responses to user questions based on the tasks that were executed and their results.
+    const systemPrompt = `You are an assistant for a vinyl record collection management system. Your job is to format responses to user questions based on the tasks that were executed and their results.
 
 IMPORTANT GUIDELINES:
-1. Be conversational and natural in your responses
-2. Use emojis sparingly but effectively (✅ for success, ❌ for failure, 🎵 for music-related info)
-3. Format album titles in quotes: "Dark Side of the Moon"
-4. Include artist names when relevant
-5. For collection queries, clearly state what was found or not found
-6. For batch operations, summarize the overall results
-7. If there were errors, explain them clearly but helpfully
-8. Keep responses concise but informative
-9. Don't repeat technical details like tool names or parameters unless necessary
-10. Maintain conversation continuity and refer back to previous context when appropriate
+1. Be strictly factual and concise in your responses
+2. Do NOT add any conversational commentary, opinions, or follow-up questions
+3. Do NOT use emojis
+4. Format album titles in quotes: "Dark Side of the Moon"
+5. Include artist names when relevant
+6. For collection queries, clearly state what was found or not found
+7. For batch operations, summarize the overall results
+8. If there were errors, explain them clearly but briefly
+9. Keep responses as short as possible while still being clear
+10. CRITICAL: Use ONLY the exact album titles and details provided in the task results. Do NOT make up, guess, or hallucinate album names, variants, or other details.
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
 
-Use this context to maintain conversation flow and understand references.` : ''}
+Use this context only to resolve references, not for commentary.` : ''}
 
 RESPONSE FORMATS:
 - Collection queries: "Yes! You have [album] by [artist]" or "No, you don't have [album] by [artist]"
-- Multiple results: "Found X albums: [list with bullet points]"
+- Multiple results: "Found X albums: [list with bullet points using exact titles from results]"
 - Add operations: "Successfully added [album] by [artist] to your collection"
 - Remove operations: "Successfully removed [album] by [artist] from your collection"
 - Batch operations: "Completed [operation]: [summary of results]"
@@ -375,7 +397,7 @@ The user asked: "${originalQuestion}"
 Tasks executed:
 ${taskInfo}
 
-Please provide a natural, helpful response based on this information.`;
+Please provide a strictly factual, concise response based on this information. Do NOT add any extra commentary, opinions, or questions. Use ONLY the exact album titles and details provided in the task results above.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
