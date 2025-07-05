@@ -1,170 +1,14 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import OpenAI from 'npm:openai@4.20.1'
-
-// MCP Client Types
-interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, any>;
-    required?: string[];
-  };
-}
-
-interface MCPToolCall {
-  name: string;
-  arguments: Record<string, any>;
-}
-
-// MCP Client Class (simplified for Edge Function)
-class MCPClient {
-  private serverUrl: string;
-  private requestId = 0;
-  private tools: MCPTool[] = [];
-  private initialized = false;
-
-  constructor(serverUrl: string) {
-    this.serverUrl = serverUrl;
-  }
-
-  private generateRequestId(): string {
-    return `req_${Date.now()}_${++this.requestId}`;
-  }
-
-  private async makeRequest(request: any, authToken?: string): Promise<any> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(this.serverUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
-  }
-
-  async initialize(authToken?: string): Promise<void> {
-    console.log('[MCP Client] Initializing connection to MCP server');
-    
-    const request = {
-      jsonrpc: '2.0',
-      id: this.generateRequestId(),
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {
-          tools: {},
-          resources: {
-            listChanged: false
-          }
-        },
-        clientInfo: {
-          name: 'vinyl-agent-mcp-client',
-          version: '1.0.0'
-        }
-      }
-    };
-
-    const response = await this.makeRequest(request, authToken);
-    
-    if (response.error) {
-      throw new Error(`MCP initialization failed: ${response.error.message}`);
-    }
-
-    console.log('[MCP Client] Successfully initialized MCP connection');
-    this.initialized = true;
-  }
-
-  async discoverTools(authToken?: string): Promise<MCPTool[]> {
-    if (!this.initialized) {
-      await this.initialize(authToken);
-    }
-
-    console.log('[MCP Client] Discovering available tools');
-    
-    const request = {
-      jsonrpc: '2.0',
-      id: this.generateRequestId(),
-      method: 'tools/list'
-    };
-
-    const response = await this.makeRequest(request, authToken);
-    
-    if (response.error) {
-      throw new Error(`Tool discovery failed: ${response.error.message}`);
-    }
-
-    this.tools = response.result?.tools || [];
-    console.log('[MCP Client] Discovered tools:', this.tools.map(t => t.name));
-    
-    return this.tools;
-  }
-
-  async executeTool(toolName: string, parameters: Record<string, any>, authToken?: string): Promise<any> {
-    if (!this.initialized) {
-      await this.initialize(authToken);
-    }
-
-    console.log('[MCP Client] Calling tool:', toolName, 'with args:', parameters);
-    
-    const request = {
-      jsonrpc: '2.0',
-      id: this.generateRequestId(),
-      method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: parameters
-      }
-    };
-
-    const response = await this.makeRequest(request, authToken);
-    
-    if (response.error) {
-      throw new Error(`Tool call failed: ${response.error.message}`);
-    }
-
-    const result = response.result;
-    console.log('[MCP Client] Tool call successful:', toolName);
-    
-    // Parse result
-    try {
-      const textContent = result.content.find((c: any) => c.type === 'text');
-      if (textContent) {
-        return JSON.parse(textContent.text);
-      }
-      return result;
-    } catch (error) {
-      console.warn('[MCP Client] Failed to parse tool result as JSON, returning raw result');
-      return result;
-    }
-  }
-
-  getCachedTools(): MCPTool[] {
-    return [...this.tools];
-  }
-
-  hasTool(toolName: string): boolean {
-    return this.tools.some(tool => tool.name === toolName);
-  }
-}
+import { MCPClient, MCPTool, createMCPClient } from '../shared/mcp-utils.ts'
 
 // Operation interface
 interface Operation {
   tool: string;
   parameters: any;
   description: string;
+  requiresConfirmation?: boolean;
 }
 
 // Function to plan operations using GPT (returns array of operations)
@@ -191,6 +35,7 @@ Your job is to:
 2. Consider the conversation context to understand references and maintain continuity
 3. Break down complex operations into sequential tool calls
 4. Create an array of operations to execute
+5. IMPORTANT: For add/remove operations, mark them as requiring confirmation
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
@@ -208,8 +53,8 @@ Multi-step scenarios to detect:
 
 IMPORTANT: Use exact tool names as defined in the tool descriptions:
 - vinyl_collection_query: Query vinyl collection
-- vinyl_add_album: Add album to collection
-- vinyl_remove_album: Remove album from collection
+- vinyl_add_album: Add album to collection (REQUIRES CONFIRMATION)
+- vinyl_remove_album: Remove album from collection (REQUIRES CONFIRMATION)
 
 Response format (JSON only):
 {
@@ -217,15 +62,16 @@ Response format (JSON only):
     {
       "tool": "tool_name",
       "parameters": { /* tool parameters */ },
-      "description": "What this operation does"
+      "description": "What this operation does",
+      "requiresConfirmation": true/false
     }
   ]
 }
 
 Examples:
-- "Do I have Dark Side of the Moon?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}]}
-- "Do I have these albums: Dark Side of the Moon, Abbey Road?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon"}, {"tool": "vinyl_collection_query", "parameters": {"albumName": "Abbey Road"}, "description": "Check for Abbey Road"}]}
-- "Add these albums to my collection: Dark Side of the Moon by Pink Floyd, Abbey Road by The Beatles" → {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd"}, {"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles"}]}
+- "Do I have Dark Side of the Moon?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon", "requiresConfirmation": false}]}
+- "Add Dark Side of the Moon by Pink Floyd" → {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd", "requiresConfirmation": true}]}
+- "Remove Abbey Road from my collection" → {"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Abbey Road"}, "description": "Remove Abbey Road from collection", "requiresConfirmation": true}]}
 
 Only return JSON, no other text.`;
 
@@ -483,8 +329,7 @@ Deno.serve(async (req) => {
 
     // Create MCP client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const mcpServerUrl = `${supabaseUrl}/functions/v1/mcp-server`;
-    const mcpClient = new MCPClient(mcpServerUrl);
+    const mcpClient = createMCPClient(supabaseUrl);
     
     // Get auth token
     const authToken = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -514,25 +359,84 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Execute all operations
-    console.log(`Executing ${operations.length} operation(s):`, operations.map(op => op.description));
-    const executionResults = await executeOperations(operations, mcpClient, authToken!, userMessage);
+    // Check if any operations require confirmation
+    const operationsRequiringConfirmation = operations.filter(op => op.requiresConfirmation);
+    const operationsToExecute = operations.filter(op => !op.requiresConfirmation);
     
-    // Format response using GPT
-    const formattedMessage = await formatResponseWithGPT(userMessage, executionResults, conversationContext);
+    if (operationsRequiringConfirmation.length > 0) {
+      // Return confirmation requests instead of executing
+      const confirmationRequests = operationsRequiringConfirmation.map((op, index) => {
+        const operationId = `op_${Date.now()}_${index}`;
+        const action = op.tool === 'vinyl_add_album' ? 'add' : 'remove';
+        
+        return {
+          operationId,
+          album: {
+            title: op.parameters.albumName || 'Unknown Album',
+            artist: op.parameters.artistName || 'Unknown Artist',
+            releaseYear: op.parameters.releaseYear,
+            artworkUrl: op.parameters.artworkUrl
+          },
+          action,
+          originalOperation: op
+        };
+      });
+      
+      const response = {
+        message: `I found ${operationsRequiringConfirmation.length} album(s) that need your confirmation before ${operationsRequiringConfirmation[0].tool === 'vinyl_add_album' ? 'adding' : 'removing'} from your collection. Please review the details below.`,
+        timestamp: new Date().toISOString(),
+        type: 'album_confirmation',
+        data: {
+          confirmations: confirmationRequests,
+          pendingOperations: operationsRequiringConfirmation
+        }
+      };
+      
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
     
-    // Determine response type based on number of operations
-    const responseType = operations.length === 1 ? 'single_step' : 'multi_step';
+    // Execute operations that don't require confirmation
+    if (operationsToExecute.length > 0) {
+      console.log(`Executing ${operationsToExecute.length} operation(s):`, operationsToExecute.map(op => op.description));
+      const executionResults = await executeOperations(operationsToExecute, mcpClient, authToken!, userMessage);
+      
+      // Format response using GPT
+      const formattedMessage = await formatResponseWithGPT(userMessage, executionResults, conversationContext);
+      
+      // Determine response type based on number of operations
+      const responseType = operationsToExecute.length === 1 ? 'single_step' : 'multi_step';
+      
+      return new Response(JSON.stringify({
+        message: formattedMessage,
+        timestamp: new Date().toISOString(),
+        type: responseType,
+        data: {
+          operations: operationsToExecute.length,
+          results: executionResults
+        }
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
     
-    return new Response(JSON.stringify({
-      message: formattedMessage,
+    // No operations to execute
+    const response = {
+      message: "I understand your request but couldn't determine what action to take. Please try rephrasing your question.",
       timestamp: new Date().toISOString(),
-      type: responseType,
-      data: {
-        operations: operations.length,
-        results: executionResults
-      }
-    }), {
+      type: 'general'
+    };
+
+    return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

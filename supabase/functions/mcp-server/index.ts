@@ -1,41 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-
-// MCP Protocol Types
-interface MCPRequest {
-  jsonrpc: '2.0';
-  id: string | number;
-  method: string;
-  params?: any;
-}
-
-interface MCPResponse {
-  jsonrpc: '2.0';
-  id: string | number;
-  result?: any;
-  error?: {
-    code: number;
-    message: string;
-    data?: any;
-  };
-}
-
-interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, any>;
-    required?: string[];
-  };
-}
-
-interface MCPResource {
-  uri: string;
-  name: string;
-  description: string;
-  mimeType: string;
-}
+import { MCPRequest, MCPResponse, MCPTool, MCPResource } from '../shared/mcp-utils.ts'
 
 // MCP Server Configuration
 const MCP_SERVER_INFO = {

@@ -3,16 +3,19 @@ import Image from 'next/image';
 import CollectionStatus from './CollectionStatus';
 import AlbumAction from './AlbumAction';
 import BatchProgress from './BatchProgress';
+import AlbumConfirmationCard from './AlbumConfirmationCard';
 
 export interface ChatMessageProps {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress';
+  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress' | 'album_confirmation';
   imageUrl?: string;
-  data?: any; // For collection query results, album actions, or batch progress
+  data?: any; // For collection query results, album actions, batch progress, or album confirmation
   className?: string;
+  onAlbumConfirm?: (operationId: string) => void;
+  onAlbumDeny?: (operationId: string) => void;
 }
 
 export default function ChatMessage({ 
@@ -22,7 +25,9 @@ export default function ChatMessage({
   type,
   imageUrl,
   data,
-  className = '' 
+  className = '',
+  onAlbumConfirm,
+  onAlbumDeny
 }: ChatMessageProps) {
   const isUser = sender === 'user';
   
@@ -72,6 +77,19 @@ export default function ChatMessage({
               artistName={data.artistName}
               onConfirm={data.onConfirm}
               onCancel={data.onCancel}
+              isLoading={data.isLoading}
+            />
+          </div>
+        )}
+
+        {/* Album Confirmation Display */}
+        {type === 'album_confirmation' && data && onAlbumConfirm && onAlbumDeny && (
+          <div className="mb-2">
+            <AlbumConfirmationCard
+              album={data.album}
+              action={data.action}
+              onConfirm={() => onAlbumConfirm(data.operationId)}
+              onDeny={() => onAlbumDeny(data.operationId)}
               isLoading={data.isLoading}
             />
           </div>

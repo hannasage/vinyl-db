@@ -57,21 +57,33 @@ export interface ChatMessage extends SupabaseDbEntry {
   data?: any; // For collection query results
 }
 
+// Album confirmation data interface
+export interface AlbumConfirmationData {
+  album: {
+    title: string;
+    artist: string;
+    releaseYear?: number;
+    artworkUrl?: string;
+  };
+  action: 'add' | 'remove';
+  operationId: string; // Unique ID for tracking the operation
+}
+
 // Chat Message Type for the chat interface (with string IDs)
 export interface ChatMessageType {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: Date;
-  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress';
+  type: 'text' | 'image' | 'collection_status' | 'album_action' | 'batch_progress' | 'album_confirmation';
   imageUrl?: string;
   imageFile?: File;
-  data?: any; // For collection query results, album actions, or batch progress
+  data?: any; // For collection query results, album actions, batch progress, or album confirmation
 }
 
 export interface ChatResponse {
   message: string;
   timestamp: string;
-  type?: 'general' | 'collection_query' | 'error';
+  type?: 'general' | 'collection_query' | 'error' | 'album_confirmation';
   data?: any;
 }

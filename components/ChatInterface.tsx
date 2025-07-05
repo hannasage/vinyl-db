@@ -19,6 +19,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [pendingConfirmations, setPendingConfirmations] = useState<Map<string, any>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Clear memory when component mounts (start fresh)
@@ -139,19 +140,49 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       }
 
       const response = data as ChatResponse;
-      const agentMessage: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        content: response.message,
-        sender: 'agent',
-        timestamp: new Date(response.timestamp),
-        type: response.type === 'collection_query' ? 'collection_status' : 'text',
-        data: response.data
-      };
-
-      setMessages(prev => [...prev, agentMessage]);
       
-      // Add agent message to short-term memory
-      memoryManager.addMessage(agentMessage);
+      // Handle album confirmation responses
+      if (response.type === 'album_confirmation' && response.data?.confirmations) {
+        // Store pending confirmations
+        const newConfirmations = new Map(pendingConfirmations);
+        response.data.confirmations.forEach((confirmation: any) => {
+          newConfirmations.set(confirmation.operationId, confirmation);
+        });
+        setPendingConfirmations(newConfirmations);
+        
+        // Create confirmation messages
+        response.data.confirmations.forEach((confirmation: any) => {
+          const confirmationMessage: ChatMessageType = {
+            id: (Date.now() + Math.random()).toString(),
+            content: response.message,
+            sender: 'agent',
+            timestamp: new Date(response.timestamp),
+            type: 'album_confirmation',
+            data: {
+              album: confirmation.album,
+              action: confirmation.action,
+              operationId: confirmation.operationId,
+              isLoading: false
+            }
+          };
+          
+          setMessages(prev => [...prev, confirmationMessage]);
+          memoryManager.addMessage(confirmationMessage);
+        });
+      } else {
+        // Handle regular responses
+        const agentMessage: ChatMessageType = {
+          id: (Date.now() + 1).toString(),
+          content: response.message,
+          sender: 'agent',
+          timestamp: new Date(response.timestamp),
+          type: response.type === 'collection_query' ? 'collection_status' : 'text',
+          data: response.data
+        };
+
+        setMessages(prev => [...prev, agentMessage]);
+        memoryManager.addMessage(agentMessage);
+      }
     } catch (error) {
       console.error('Error calling chat endpoint:', error);
       
@@ -185,6 +216,82 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setSelectedImage(null);
   };
 
+  const handleAlbumConfirm = async (operationId: string) => {
+    const confirmation = pendingConfirmations.get(operationId);
+    if (!confirmation) {
+      console.error('Confirmation not found for operation:', operationId);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase.functions.invoke('execute-confirmed-operation', {
+        body: {
+          operationId,
+          originalOperation: confirmation.originalOperation
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Add success message
+      const successMessage: ChatMessageType = {
+        id: (Date.now() + 1).toString(),
+        content: data.message,
+        sender: 'agent',
+        timestamp: new Date(),
+        type: 'text'
+      };
+
+      setMessages(prev => [...prev, successMessage]);
+      memoryManager.addMessage(successMessage);
+
+      // Remove from pending confirmations
+      setPendingConfirmations(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(operationId);
+        return newMap;
+      });
+
+    } catch (error) {
+      console.error('Error executing confirmed operation:', error);
+      
+      const errorMessage: ChatMessageType = {
+        id: (Date.now() + 1).toString(),
+        content: 'Sorry, I encountered an error while processing your confirmation. Please try again.',
+        sender: 'agent',
+        timestamp: new Date(),
+        type: 'text'
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
+  const handleAlbumDeny = (operationId: string) => {
+    // Add cancellation message
+    const cancelMessage: ChatMessageType = {
+      id: (Date.now() + 1).toString(),
+      content: 'Operation cancelled.',
+      sender: 'agent',
+      timestamp: new Date(),
+      type: 'text'
+    };
+
+    setMessages(prev => [...prev, cancelMessage]);
+    memoryManager.addMessage(cancelMessage);
+
+    // Remove from pending confirmations
+    setPendingConfirmations(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(operationId);
+      return newMap;
+    });
+  };
+
   const canSend = (inputValue.trim() || selectedImage) && !isLoading;
 
   return (
@@ -212,6 +319,9 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
               timestamp={message.timestamp}
               type={message.type}
               imageUrl={message.imageUrl}
+              data={message.data}
+              onAlbumConfirm={handleAlbumConfirm}
+              onAlbumDeny={handleAlbumDeny}
             />
           ))
         )}
