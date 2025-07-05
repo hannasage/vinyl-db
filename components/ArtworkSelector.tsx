@@ -83,7 +83,7 @@ export default function ArtworkSelector({
           <div className="text-4xl mb-4">🎵</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Artwork Found</h3>
           <p className="text-gray-600 mb-4">
-            We couldn't find any artwork for "{albumName}" by {artistName}.
+            We couldn&apos;t find any artwork for &quot;{albumName}&quot; by {artistName}.
           </p>
           <button
             onClick={onCancel}
@@ -101,7 +101,7 @@ export default function ArtworkSelector({
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Album Artwork</h3>
         <p className="text-gray-600">
-          Choose the best artwork for "{albumName}" by {artistName}
+          Choose the best artwork for &quot;{albumName}&quot; by {artistName}
         </p>
       </div>
 

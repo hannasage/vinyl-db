@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { fetchAlbumArtwork, getBestArtworkImage } from '@/utils/artwork';
 import { AlbumArtworkImage } from '@/data/types';
@@ -46,15 +46,7 @@ export default function AlbumConfirmationCard({
   const textColor = isAdd ? 'text-green-800' : 'text-red-800';
   const buttonColor = isAdd ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600';
 
-  // Auto-fetch artwork when component mounts (for add actions)
-  useEffect(() => {
-    if (isAdd && enableArtworkSearch && !album.artworkUrl && !hasSearchedRef.current) {
-      hasSearchedRef.current = true;
-      handleSearchArtwork();
-    }
-  }, [isAdd, enableArtworkSearch, album.artworkUrl]);
-
-  const handleSearchArtwork = async () => {
+  const handleSearchArtwork = useCallback(async () => {
     if (!isAdd) return; // Only search for add actions
     
     setIsSearchingArtwork(true);
@@ -82,7 +74,15 @@ export default function AlbumConfirmationCard({
     } finally {
       setIsSearchingArtwork(false);
     }
-  };
+  }, [isAdd, album.title, album.artist, album.releaseYear]);
+
+  // Auto-fetch artwork when component mounts (for add actions)
+  useEffect(() => {
+    if (isAdd && enableArtworkSearch && !album.artworkUrl && !hasSearchedRef.current) {
+      hasSearchedRef.current = true;
+      handleSearchArtwork();
+    }
+  }, [isAdd, enableArtworkSearch, album.artworkUrl, handleSearchArtwork]);
 
   const handleConfirm = () => {
     onConfirm(selectedArtworkUrl);
