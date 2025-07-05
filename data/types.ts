@@ -87,3 +87,36 @@ export interface ChatResponse {
   type?: 'general' | 'collection_query' | 'error' | 'album_confirmation';
   data?: any;
 }
+
+// Album Artwork Types
+export interface AlbumArtworkImage {
+  url: string;
+  title: string;
+  source: string;
+  width: number;
+  height: number;
+  aspectRatio: number;
+  estimatedQuality: 'excellent' | 'good' | 'acceptable' | 'low' | 'unknown';
+}
+
+export interface AlbumArtworkSearchResult {
+  success: boolean;
+  message: string;
+  images: AlbumArtworkImage[];
+  searchInfo: {
+    albumName: string;
+    artistName: string;
+    releaseYear?: number;
+    queriesUsed: string[];
+    totalImagesFound: number;
+    qualityBreakdown: Record<string, number>;
+  };
+}
+
+export interface AlbumArtworkRequest {
+  albumName: string;
+  artistName: string;
+  releaseYear?: number;
+  preferredSize?: 'medium' | 'large' | 'extra_large';
+  maxResults?: number;
+}

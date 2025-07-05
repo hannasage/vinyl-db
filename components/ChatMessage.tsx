@@ -14,7 +14,7 @@ export interface ChatMessageProps {
   imageUrl?: string;
   data?: any; // For collection query results, album actions, batch progress, or album confirmation
   className?: string;
-  onAlbumConfirm?: (operationId: string) => void;
+  onAlbumConfirm?: (operationId: string, selectedArtworkUrl?: string) => void;
   onAlbumDeny?: (operationId: string) => void;
 }
 
@@ -88,7 +88,7 @@ export default function ChatMessage({
             <AlbumConfirmationCard
               album={data.album}
               action={data.action}
-              onConfirm={() => onAlbumConfirm(data.operationId)}
+              onConfirm={(selectedArtworkUrl) => onAlbumConfirm(data.operationId, selectedArtworkUrl)}
               onDeny={() => onAlbumDeny(data.operationId)}
               isLoading={data.isLoading}
             />

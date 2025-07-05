@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
     const requestData = await req.json().catch(() => ({}));
     const operationId = requestData.operationId;
     const originalOperation = requestData.originalOperation;
+    const selectedArtworkUrl = requestData.selectedArtworkUrl;
     
     if (!operationId || !originalOperation) {
       return new Response(JSON.stringify({ 
@@ -64,10 +65,16 @@ Deno.serve(async (req) => {
     // Get auth token
     const authToken = req.headers.get('Authorization')?.replace('Bearer ', '');
     
+    // Update parameters with selected artwork if provided
+    const updatedParameters = { ...originalOperation.parameters };
+    if (selectedArtworkUrl && originalOperation.tool === 'vinyl_add_album') {
+      updatedParameters.selectedArtworkUrl = selectedArtworkUrl;
+    }
+
     // Execute the confirmed operation
     const result = await mcpClient.executeTool(
       originalOperation.tool, 
-      originalOperation.parameters, 
+      updatedParameters, 
       authToken
     );
     

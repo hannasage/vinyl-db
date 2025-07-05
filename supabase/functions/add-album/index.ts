@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     // Get the request body
     const requestData = await req.json().catch(() => ({}));
-    const { albumName, artistName, releaseYear, variant, purchaseDate, acquiredDate, preordered, artworkUrl, size } = requestData;
+    const { albumName, artistName, releaseYear, variant, purchaseDate, acquiredDate, preordered, artworkUrl, size, selectedArtworkUrl } = requestData;
     
     console.log(`[add-album] Request: albumName="${albumName}", artistName="${artistName}", releaseYear=${releaseYear}, variant="${variant}"`);
     console.log(`[add-album] Using ${isInternalCall ? 'service role' : 'user authentication'}`);
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       purchase_date: purchaseDate || null,
       acquired_date: acquiredDate || new Date().toISOString().split('T')[0], // Default to today
       preordered: preordered || false,
-      artwork_url: artworkUrl || null,
+      artwork_url: selectedArtworkUrl || artworkUrl || null,
       size: size || 12 // Default to 12"
     };
 

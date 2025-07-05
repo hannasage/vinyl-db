@@ -216,7 +216,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setSelectedImage(null);
   };
 
-  const handleAlbumConfirm = async (operationId: string) => {
+  const handleAlbumConfirm = async (operationId: string, selectedArtworkUrl?: string) => {
     const confirmation = pendingConfirmations.get(operationId);
     if (!confirmation) {
       console.error('Confirmation not found for operation:', operationId);
@@ -229,7 +229,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       const { data, error } = await supabase.functions.invoke('execute-confirmed-operation', {
         body: {
           operationId,
-          originalOperation: confirmation.originalOperation
+          originalOperation: confirmation.originalOperation,
+          selectedArtworkUrl
         }
       });
 
