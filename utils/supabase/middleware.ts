@@ -37,8 +37,9 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser()
 
+    // Enable authentication check for admin routes
     if (!user && PRIVATE_URI.some(uri => request.nextUrl.pathname.startsWith(uri))) {
-        // no user, potentially respond by redirecting the user to the login page
+        // no user, redirect to login page
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
