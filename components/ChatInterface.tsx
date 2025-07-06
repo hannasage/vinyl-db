@@ -226,11 +226,21 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     try {
       const supabase = createClient();
       
-      const { data, error } = await supabase.functions.invoke('execute-confirmed-operation', {
+      // Update the operation parameters with selected artwork if provided
+      const updatedOperation = {
+        ...confirmation.originalOperation,
+        parameters: {
+          ...confirmation.originalOperation.parameters,
+          ...(selectedArtworkUrl && { artworkUrl: selectedArtworkUrl })
+        }
+      };
+      
+      // Send the confirmed operation directly to chat-response
+      const { data, error } = await supabase.functions.invoke('chat-response', {
         body: {
-          operationId,
-          originalOperation: confirmation.originalOperation,
-          selectedArtworkUrl
+          message: `Confirm ${confirmation.action} operation for ${confirmation.album.title} by ${confirmation.album.artist}`,
+          conversationContext: memoryManager.getConversationContext(),
+          confirmedOperation: updatedOperation
         }
       });
 
