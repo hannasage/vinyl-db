@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import OpenAI from 'npm:openai@4.20.1'
+import { OpenAI } from 'jsr:@openai/openai@4'
 import { MCPClient, MCPTool, createMCPClient } from '../shared/mcp-utils.ts'
 
 // Operation interface
@@ -9,6 +9,27 @@ interface Operation {
   parameters: any;
   description: string;
   requiresConfirmation?: boolean;
+}
+
+interface ExecutionResult {
+  operation: Operation;
+  success: boolean;
+  result: any;
+  error?: string;
+  retryCount?: number;
+  shouldRetryWithAlternative?: boolean;
+  alternativeSearch?: Operation;
+}
+
+interface AgentState {
+  originalQuestion: string;
+  conversationContext?: string;
+  executedOperations: ExecutionResult[];
+  pendingOperations: Operation[];
+  failedOperations: ExecutionResult[];
+  maxRetries: number;
+  maxIterations: number;
+  currentIteration: number;
 }
 
 // Function to plan operations using GPT (returns array of operations)
@@ -36,6 +57,7 @@ Your job is to:
 3. Break down complex operations into sequential tool calls
 4. Create an array of operations to execute
 5. IMPORTANT: For add/remove operations, mark them as requiring confirmation
+6. CRITICAL: Distinguish between album names and artist names in queries
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
@@ -45,35 +67,112 @@ Use this context to understand references like "her new album" or "that artist" 
 Available tools:
 ${toolDescriptions}
 
-Multi-step scenarios to detect:
-- Batch queries: "Do I have these albums: Dark Side of the Moon, Abbey Road, The Wall?"
-- Batch operations: "Add these albums to my collection: [list]"
-- Batch removals: "Remove these albums from my collection: [list]"
-- Complex queries: "Check if I have any Pink Floyd or Beatles albums"
-
-IMPORTANT: Use exact tool names as defined in the tool descriptions:
-- vinyl_collection_query: Query vinyl collection
-- vinyl_add_album: Add album to collection (REQUIRES CONFIRMATION)
-- vinyl_remove_album: Remove album from collection (REQUIRES CONFIRMATION)
-
-Response format (JSON only):
+OPERATION FORMAT:
+Return a JSON object with this structure:
 {
   "operations": [
     {
       "tool": "tool_name",
-      "parameters": { /* tool parameters */ },
-      "description": "What this operation does",
+      "parameters": { "param1": "value1" },
+      "description": "Human-readable description of what this operation does",
       "requiresConfirmation": true/false
     }
   ]
 }
 
-Examples:
-- "Do I have Dark Side of the Moon?" → {"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon"}, "description": "Check for Dark Side of the Moon", "requiresConfirmation": false}]}
-- "Add Dark Side of the Moon by Pink Floyd" → {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Add Dark Side of the Moon by Pink Floyd", "requiresConfirmation": true}]}
-- "Remove Abbey Road from my collection" → {"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Abbey Road"}, "description": "Remove Abbey Road from collection", "requiresConfirmation": true}]}
+GUIDELINES:
+- For collection queries, use vinyl_collection_query
+- For adding albums, use vinyl_add_album and set requiresConfirmation: true
+- For removing albums, use vinyl_remove_album and set requiresConfirmation: true
+- For fetching artwork, use fetch_album_artwork
+- For fetching album details, use fetch_album_details
+- For parsing image text, use parse_image_text
+- For uploading images, use upload_image
+- For executing confirmed operations, use execute_confirmed_operation
 
-Only return JSON, no other text.`;
+ARTIST vs ALBUM DETECTION:
+- If the user asks "do I have [name]", analyze if [name] is likely an artist or album
+- Artist indicators: single names, band names, known artists
+- Album indicators: longer titles, "album", "record", "LP" keywords
+- When uncertain, prefer artist search first (more common query pattern)
+- For ambiguous cases, plan BOTH artist and album searches
+
+EXAMPLES:
+User: "Do I have Dark Side of the Moon by Pink Floyd?"
+Response: {
+  "operations": [
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "albumName": "Dark Side of the Moon", "artistName": "Pink Floyd" },
+      "description": "Query collection for Dark Side of the Moon by Pink Floyd",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+User: "Do I have Pink Floyd?"
+Response: {
+  "operations": [
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "artistName": "Pink Floyd" },
+      "description": "Query collection for albums by Pink Floyd",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+User: "Do I have Jane Remover?"
+Response: {
+  "operations": [
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "artistName": "Jane Remover" },
+      "description": "Query collection for albums by Jane Remover",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+User: "Add Dark Side of the Moon by Pink Floyd to my collection"
+Response: {
+  "operations": [
+    {
+      "tool": "vinyl_add_album",
+      "parameters": { "albumName": "Dark Side of the Moon", "artistName": "Pink Floyd" },
+      "description": "Add Dark Side of the Moon by Pink Floyd to collection",
+      "requiresConfirmation": true
+    }
+  ]
+}
+
+User: "Do I have these albums: Dark Side of the Moon, Abbey Road, and Led Zeppelin IV?"
+Response: {
+  "operations": [
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "albumName": "Dark Side of the Moon" },
+      "description": "Query collection for Dark Side of the Moon",
+      "requiresConfirmation": false
+    },
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "albumName": "Abbey Road" },
+      "description": "Query collection for Abbey Road",
+      "requiresConfirmation": false
+    },
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "albumName": "Led Zeppelin IV" },
+      "description": "Query collection for Led Zeppelin IV",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+Now analyze this user request: "${message}"
+
+Return only the JSON object with the operations array.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
@@ -121,12 +220,50 @@ Only return JSON, no other text.`;
 }
 
 // Function to execute a single operation
-async function executeOperation(operation: Operation, mcpClient: MCPClient, authToken: string): Promise<{success: boolean, result: any, error?: string}> {
+async function executeOperation(operation: Operation, mcpClient: MCPClient, authToken: string): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
   console.log(`[chat-response] Executing operation: ${operation.tool} with params:`, operation.parameters);
   
   try {
     const result = await mcpClient.executeTool(operation.tool, operation.parameters, authToken);
     console.log(`[chat-response] Tool ${operation.tool} returned result:`, result);
+    
+    // Check if this is a collection query that returned no results
+    if (operation.tool === 'vinyl_collection_query' && result.found === false) {
+      // Determine if we should try alternative search
+      const hasAlbumName = operation.parameters.albumName && !operation.parameters.artistName;
+      const hasArtistName = operation.parameters.artistName && !operation.parameters.albumName;
+      
+      if (hasAlbumName) {
+        // If we searched by album name and found nothing, try searching by artist name
+        console.log(`[chat-response] Album search returned no results, will try artist search for: ${operation.parameters.albumName}`);
+        return {
+          success: true,
+          result,
+          shouldRetryWithAlternative: true,
+          alternativeSearch: {
+            tool: 'vinyl_collection_query',
+            parameters: { artistName: operation.parameters.albumName },
+            description: `Query collection for albums by ${operation.parameters.albumName} (alternative search)`,
+            requiresConfirmation: false
+          }
+        };
+      } else if (hasArtistName) {
+        // If we searched by artist name and found nothing, try searching by album name
+        console.log(`[chat-response] Artist search returned no results, will try album search for: ${operation.parameters.artistName}`);
+        return {
+          success: true,
+          result,
+          shouldRetryWithAlternative: true,
+          alternativeSearch: {
+            tool: 'vinyl_collection_query',
+            parameters: { albumName: operation.parameters.artistName },
+            description: `Query collection for album "${operation.parameters.artistName}" (alternative search)`,
+            requiresConfirmation: false
+          }
+        };
+      }
+    }
+    
     return {
       success: true,
       result
@@ -141,23 +278,350 @@ async function executeOperation(operation: Operation, mcpClient: MCPClient, auth
   }
 }
 
-// Function to execute array of operations
-async function executeOperations(operations: Operation[], mcpClient: MCPClient, authToken: string): Promise<Array<{operation: Operation, success: boolean, result: any, error?: string}>> {
-  const results = [];
+// Function to prioritize operations based on dependencies and importance
+function prioritizeOperations(operations: Operation[]): Operation[] {
+  // Create a copy to avoid mutating the original array
+  const prioritized = [...operations];
   
-  for (let i = 0; i < operations.length; i++) {
-    const operation = operations[i];
-    console.log(`Executing operation ${i + 1}/${operations.length}: ${operation.description}`);
+  // Sort operations by priority:
+  // 1. Queries first (they don't modify state)
+  // 2. Add operations (they create new data)
+  // 3. Remove operations (they delete data)
+  // 4. Other operations
+  
+  const priorityOrder = {
+    'vinyl_collection_query': 1,
+    'fetch_album_artwork': 2,
+    'fetch_album_details': 2,
+    'parse_image_text': 2,
+    'upload_image': 3,
+    'vinyl_add_album': 4,
+    'vinyl_remove_album': 5,
+    'execute_confirmed_operation': 6
+  };
+
+  return prioritized.sort((a, b) => {
+    const priorityA = priorityOrder[a.tool] || 10;
+    const priorityB = priorityOrder[b.tool] || 10;
+    return priorityA - priorityB;
+  });
+}
+
+// Function to check if operations have dependencies
+function checkOperationDependencies(operations: Operation[]): Map<string, string[]> {
+  const dependencies = new Map<string, string[]>();
+  
+  for (const operation of operations) {
+    const deps: string[] = [];
     
-    const result = await executeOperation(operation, mcpClient, authToken);
+    // Check if this operation depends on previous operations
+    if (operation.tool === 'vinyl_add_album' && operation.parameters.artworkUrl) {
+      // Add album operation with artwork might depend on artwork fetch
+      deps.push('fetch_album_artwork');
+    }
     
-    results.push({
-      operation,
-      ...result
-    });
+    if (operation.tool === 'execute_confirmed_operation') {
+      // Confirmed operations depend on the original operation being planned
+      deps.push('vinyl_add_album', 'vinyl_remove_album');
+    }
+    
+    dependencies.set(operation.tool, deps);
   }
   
-  return results;
+  return dependencies;
+}
+
+// Function to analyze failures and plan recovery strategies
+async function analyzeFailuresAndPlanRecovery(
+  failedOperations: ExecutionResult[],
+  originalQuestion: string,
+  conversationContext?: string
+): Promise<Operation[]> {
+  try {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      return [];
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    const failureSummary = failedOperations.map(failure => 
+      `- ${failure.operation.description} (${failure.operation.tool}): ${failure.error}`
+    ).join('\n');
+
+    const systemPrompt = `You are an intelligent agent that analyzes operation failures and plans recovery strategies.
+
+Your job is to:
+1. Analyze the failed operations and their error messages
+2. Determine if the failures are recoverable
+3. Plan alternative approaches or retry strategies
+4. Return new operations that might succeed where the previous ones failed
+
+FAILED OPERATIONS:
+${failureSummary}
+
+ORIGINAL USER REQUEST: "${originalQuestion}"
+
+${conversationContext ? `CONVERSATION CONTEXT:
+${conversationContext}` : ''}
+
+ANALYSIS GUIDELINES:
+- If an album query failed due to fuzzy matching, try alternative search strategies
+- If an add operation failed due to validation, try with different parameters
+- If a tool is unavailable, suggest alternative approaches
+- Consider if the user's request can be partially fulfilled
+- Don't retry operations that failed due to fundamental issues (e.g., missing required data)
+
+RECOVERY STRATEGIES:
+1. **Fuzzy Matching Issues**: Try broader searches or different parameter combinations
+2. **Validation Errors**: Adjust parameters based on error messages
+3. **Tool Unavailability**: Use alternative tools or approaches
+4. **Partial Success**: Focus on what can be accomplished
+
+Return a JSON object with recovery operations:
+{
+  "recovery_operations": [
+    {
+      "tool": "tool_name",
+      "parameters": { "param1": "value1" },
+      "description": "Recovery strategy description",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+Only return operations that have a reasonable chance of success. If no recovery is possible, return an empty array.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        { role: 'system', content: systemPrompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 300
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    
+    if (!content) {
+      return [];
+    }
+
+    const parsed = JSON.parse(content);
+    
+    if (parsed.recovery_operations && Array.isArray(parsed.recovery_operations)) {
+      return parsed.recovery_operations;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error analyzing failures and planning recovery:', error);
+    return [];
+  }
+}
+
+// Function to determine if the agent should continue or stop
+async function shouldContinueExecution(
+  agentState: AgentState,
+  mcpClient: MCPClient,
+  authToken: string
+): Promise<{continue: boolean, reason: string}> {
+  // Check iteration limits
+  if (agentState.currentIteration >= agentState.maxIterations) {
+    return { continue: false, reason: 'Maximum iterations reached' };
+  }
+
+  // Check if we have pending operations
+  if (agentState.pendingOperations.length > 0) {
+    return { continue: true, reason: 'Operations pending' };
+  }
+
+  // Check if we have failed operations that might be recoverable
+  if (agentState.failedOperations.length > 0) {
+    // Analyze failures and see if recovery is possible
+    const recoveryOperations = await analyzeFailuresAndPlanRecovery(
+      agentState.failedOperations,
+      agentState.originalQuestion,
+      agentState.conversationContext
+    );
+
+    if (recoveryOperations.length > 0) {
+      agentState.pendingOperations = recoveryOperations;
+      return { continue: true, reason: 'Recovery operations planned' };
+    }
+  }
+
+  return { continue: false, reason: 'No more operations to execute' };
+}
+
+// Function to generate execution analytics
+function generateExecutionAnalytics(
+  executionResults: ExecutionResult[],
+  agentState: AgentState
+): any {
+  const successful = executionResults.filter(r => r.success);
+  const failed = executionResults.filter(r => !r.success);
+  
+  const toolStats = new Map<string, { success: number; failed: number; total: number }>();
+  
+  // Calculate statistics per tool
+  for (const result of executionResults) {
+    const tool = result.operation.tool;
+    const current = toolStats.get(tool) || { success: 0, failed: 0, total: 0 };
+    
+    if (result.success) {
+      current.success++;
+    } else {
+      current.failed++;
+    }
+    current.total++;
+    
+    toolStats.set(tool, current);
+  }
+  
+  // Calculate retry statistics
+  const retryStats = executionResults.reduce((acc, result) => {
+    const retries = result.retryCount || 0;
+    acc.totalRetries += retries;
+    acc.maxRetries = Math.max(acc.maxRetries, retries);
+    return acc;
+  }, { totalRetries: 0, maxRetries: 0 });
+  
+  return {
+    summary: {
+      totalOperations: executionResults.length,
+      successfulOperations: successful.length,
+      failedOperations: failed.length,
+      successRate: executionResults.length > 0 ? (successful.length / executionResults.length * 100).toFixed(1) + '%' : '0%',
+      iterations: agentState.currentIteration,
+      maxIterations: agentState.maxIterations
+    },
+    toolBreakdown: Object.fromEntries(toolStats),
+    retryStatistics: retryStats,
+    executionTime: {
+      iterations: agentState.currentIteration,
+      averageOperationsPerIteration: agentState.currentIteration > 0 ? 
+        (executionResults.length / agentState.currentIteration).toFixed(2) : '0'
+    },
+    failureAnalysis: failed.map(f => ({
+      tool: f.operation.tool,
+      description: f.operation.description,
+      error: f.error,
+      retryCount: f.retryCount
+    }))
+  };
+}
+
+// Enhanced agent cycle with adaptive execution
+async function executeAgentCycle(
+  originalQuestion: string,
+  initialOperations: Operation[],
+  mcpClient: MCPClient,
+  authToken: string,
+  conversationContext?: string
+): Promise<{results: ExecutionResult[], analytics: any}> {
+  const agentState: AgentState = {
+    originalQuestion,
+    conversationContext,
+    executedOperations: [],
+    pendingOperations: prioritizeOperations(initialOperations), // Prioritize operations
+    failedOperations: [],
+    maxRetries: 2,
+    maxIterations: 5,
+    currentIteration: 0
+  };
+
+  console.log(`[Agent Cycle] Starting execution with ${initialOperations.length} initial operations`);
+  console.log(`[Agent Cycle] Operation priorities:`, agentState.pendingOperations.map(op => `${op.tool}: ${op.description}`));
+
+  while (true) {
+    agentState.currentIteration++;
+    console.log(`[Agent Cycle] Iteration ${agentState.currentIteration}/${agentState.maxIterations}`);
+
+    // Check if we should continue
+    const shouldContinue = await shouldContinueExecution(agentState, mcpClient, authToken);
+    if (!shouldContinue.continue) {
+      console.log(`[Agent Cycle] Stopping execution: ${shouldContinue.reason}`);
+      break;
+    }
+
+    // Execute pending operations
+    const currentOperations = [...agentState.pendingOperations];
+    agentState.pendingOperations = [];
+
+    console.log(`[Agent Cycle] Executing ${currentOperations.length} operations in iteration ${agentState.currentIteration}`);
+
+    for (const operation of currentOperations) {
+      const result = await executeOperation(operation, mcpClient, authToken);
+      const executionResult: ExecutionResult = {
+        operation,
+        success: result.success,
+        result: result.result,
+        error: result.error,
+        retryCount: agentState.failedOperations.filter(f => 
+          f.operation.tool === operation.tool && 
+          JSON.stringify(f.operation.parameters) === JSON.stringify(operation.parameters)
+        ).length,
+        shouldRetryWithAlternative: result.shouldRetryWithAlternative,
+        alternativeSearch: result.alternativeSearch
+      };
+
+      if (result.success) {
+        agentState.executedOperations.push(executionResult);
+        console.log(`[Agent Cycle] Operation succeeded: ${operation.description}`);
+        
+        // Check if this operation suggests an alternative search
+        if (result.shouldRetryWithAlternative && result.alternativeSearch) {
+          console.log(`[Agent Cycle] Adding alternative search operation: ${result.alternativeSearch.description}`);
+          agentState.pendingOperations.push(result.alternativeSearch);
+        }
+        
+        // Check if this success enables any dependent operations
+        // For example, if we successfully fetched artwork, we might want to add the album
+        if (operation.tool === 'fetch_album_artwork' && operation.result?.url) {
+          // Look for pending add operations that could use this artwork
+          const pendingAddOps = agentState.pendingOperations.filter(op => 
+            op.tool === 'vinyl_add_album' && 
+            op.parameters.albumName === operation.parameters.albumName &&
+            op.parameters.artistName === operation.parameters.artistName
+          );
+          
+          for (const addOp of pendingAddOps) {
+            addOp.parameters.artworkUrl = operation.result.url;
+            console.log(`[Agent Cycle] Updated add operation with artwork URL: ${addOp.description}`);
+          }
+        }
+      } else {
+        // Check if we should retry this operation
+        if (executionResult.retryCount! < agentState.maxRetries) {
+          console.log(`[Agent Cycle] Operation failed, will retry (attempt ${executionResult.retryCount! + 1}/${agentState.maxRetries}): ${operation.description}`);
+          agentState.pendingOperations.push(operation);
+        } else {
+          console.log(`[Agent Cycle] Operation failed permanently after ${agentState.maxRetries} attempts: ${operation.description}`);
+          agentState.failedOperations.push(executionResult);
+        }
+      }
+    }
+
+    // If no operations were executed in this iteration, break to avoid infinite loops
+    if (currentOperations.length === 0) {
+      console.log(`[Agent Cycle] No operations executed in this iteration, stopping`);
+      break;
+    }
+  }
+
+  const allResults = [...agentState.executedOperations, ...agentState.failedOperations];
+  const analytics = generateExecutionAnalytics(allResults, agentState);
+  
+  console.log(`[Agent Cycle] Execution completed. Success: ${agentState.executedOperations.length}, Failed: ${agentState.failedOperations.length}`);
+  console.log(`[Agent Cycle] Analytics:`, analytics.summary);
+  
+  return {
+    results: allResults,
+    analytics
+  };
 }
 
 // Function to format response using GPT
@@ -205,7 +669,13 @@ async function formatResponseWithGPT(
         resultSummary = execResult.error || 'Failed';
       }
       
-      return `${index + 1}. ${status} ${execResult.operation.description}
+      // Add context about alternative searches
+      let searchContext = '';
+      if (execResult.operation.description.includes('(alternative search)')) {
+        searchContext = ' [Alternative search]';
+      }
+      
+      return `${index + 1}. ${status} ${execResult.operation.description}${searchContext}
    Tool: ${execResult.operation.tool}
    Parameters: ${JSON.stringify(execResult.operation.parameters)}
    Result: ${resultSummary}`;
@@ -224,6 +694,7 @@ IMPORTANT GUIDELINES:
 8. If there were errors, explain them clearly but briefly
 9. Keep responses as short as possible while still being clear
 10. CRITICAL: Use ONLY the exact album titles and details provided in the task results. Do NOT make up, guess, or hallucinate album names, variants, or other details.
+11. If alternative searches were performed, acknowledge this in your response
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
@@ -233,6 +704,7 @@ Use this context only to resolve references, not for commentary.` : ''}
 RESPONSE FORMATS:
 - Collection queries: "Yes! You have [album] by [artist]" or "No, you don't have [album] by [artist]"
 - Multiple results: "Found X albums: [list with bullet points using exact titles from results]"
+- Alternative searches: "I searched for [original query] and found nothing, but when I searched for [alternative query], I found [results]"
 - Add operations: "Successfully added [album] by [artist] to your collection"
 - Remove operations: "Successfully removed [album] by [artist] from your collection"
 - Batch operations: "Completed [operation]: [summary of results]"
@@ -420,10 +892,10 @@ Deno.serve(async (req) => {
     // Execute operations that don't require confirmation
     if (operationsToExecute.length > 0) {
       console.log(`Executing ${operationsToExecute.length} operation(s):`, operationsToExecute.map(op => op.description));
-      const executionResults = await executeOperations(operationsToExecute, mcpClient, authToken!, userMessage);
+      const { results, analytics } = await executeAgentCycle(userMessage, operationsToExecute, mcpClient, authToken!, conversationContext);
       
       // Format response using GPT
-      const formattedMessage = await formatResponseWithGPT(userMessage, executionResults, conversationContext);
+      const formattedMessage = await formatResponseWithGPT(userMessage, results, conversationContext);
       
       // Determine response type based on number of operations
       const responseType = operationsToExecute.length === 1 ? 'single_step' : 'multi_step';
@@ -434,7 +906,8 @@ Deno.serve(async (req) => {
         type: responseType,
         data: {
           operations: operationsToExecute.length,
-          results: executionResults
+          results,
+          analytics
         }
       }), {
         status: 200,
