@@ -32,6 +32,22 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
+    // Add explicit authentication check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+
     // Get the request body
     const requestData = await req.json().catch(() => ({}));
     const { albumId, albumName, artistName } = requestData;

@@ -46,6 +46,22 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
         { global: { headers: { Authorization: authHeader! } } }
       );
+      
+      // Add explicit authentication check for external calls
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !user) {
+        return new Response(JSON.stringify({
+          error: 'Unauthorized',
+          message: 'Authentication required'
+        }), {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        });
+      }
     }
 
     // Get the request body

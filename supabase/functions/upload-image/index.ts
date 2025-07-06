@@ -33,9 +33,25 @@ Deno.serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
+
+    // Add explicit authentication check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
 
     // Parse multipart form data
     const formData = await req.formData();
@@ -132,11 +148,11 @@ Deno.serve(async (req) => {
         'Access-Control-Allow-Origin': '*',
       },
     });
-  } catch (err) {
-    console.error('Server error:', err);
+  } catch (error) {
+    console.error('Upload error:', error);
     return new Response(JSON.stringify({ 
       error: 'Internal server error',
-      message: err?.message || 'Unknown error'
+      details: error.message 
     }), { 
       status: 500,
       headers: {

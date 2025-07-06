@@ -25,6 +25,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Create Supabase client for authentication
+    const { createClient } = await import('jsr:@supabase/supabase-js@2');
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    );
+
+    // Add explicit authentication check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+
     // Get Tavily API key
     const tavilyApiKey = Deno.env.get('TAVILY_API_KEY');
     if (!tavilyApiKey) {
