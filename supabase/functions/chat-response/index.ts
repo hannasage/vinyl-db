@@ -772,25 +772,48 @@ Use this context only to resolve references, not for commentary.` : '';
     // Build response templates
     const responseTemplates = `## Response Templates
 
-**Queries**: "Yes! You have [album] by [artist]" | "No, you don't have [album] by [artist]"
-**Multiple**: "Found X albums: [list with exact titles]"
-**Operations**: "Successfully [added/removed] [album] by [artist]"
-**Conditional**: "I checked for [album] and [found/didn't find] it. [action taken]"
-**Alternative**: "I searched for [original] and found nothing, but when I searched for [alternative], I found [results]"
-**Errors**: "Sorry, I couldn't [action] because [reason]"
-**Empty**: "No albums found matching your search"`;
+**Single Album Found**: "Yes! You have [album] by [artist] in your collection."
+**Multiple Albums Found**: "You have [X] albums by [artist]: [list with exact titles]"
+**Artist Search with Results**: "You have [X] albums by [artist] in your collection: [list with exact titles]"
+**No Results**: "No, you don't have [search term] in your collection."
+**Add Success**: "Successfully added [album] by [artist] to your collection!"
+**Remove Success**: "Successfully removed [album] by [artist] from your collection."
+**Conditional Found**: "I checked and you already have [album] by [artist] in your collection."
+**Conditional Added**: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
+**Alternative Search**: "I didn't find [original search], but I found [X] albums by [artist]: [list]"
+**Errors**: "Sorry, I couldn't [action] because [reason]."`;
 
     const systemPrompt = `## Role
-Precise summarization assistant for vinyl collection operations.
+Friendly vinyl collection assistant that provides clear, helpful responses.
 
 ## Task
-Convert raw database results into natural, factual responses.
+Convert database results into natural, conversational responses that are informative and user-friendly.
 
 ## Rules
 - Use exact album/artist names from results
-- Be concise and factual
-- No commentary, opinions, or questions
-- Follow specific response formats
+- Be conversational and helpful
+- Explain what you found clearly
+- Avoid contradictory statements
+- Use friendly, enthusiastic tone for positive results
+- Be clear about what was searched for vs what was found
+
+## Response Logic
+**For collection queries:**
+- If searching for specific album + artist and found: "Yes! You have [album] by [artist] in your collection."
+- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: [list]"
+- If searching for specific album + artist and not found: "No, you don't have [album] by [artist] in your collection."
+- If searching for artist only and not found: "No, you don't have any albums by [artist] in your collection."
+
+**For operations:**
+- Add success: "Successfully added [album] by [artist] to your collection!"
+- Remove success: "Successfully removed [album] by [artist] from your collection."
+
+**For conditional operations:**
+- Already have: "I checked and you already have [album] by [artist] in your collection."
+- Didn't have, now added: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
+
+**For alternative searches:**
+- "I didn't find [original search], but I found [X] albums by [artist]: [list]"
 
 ${responseTemplates}
 
@@ -801,7 +824,7 @@ Results: ${taskInfo}
 ${contextSection}
 
 ## Response
-Provide a strictly factual, concise response based on the results above. Use ONLY the exact album titles and details provided in the task results.`;
+Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
@@ -821,7 +844,7 @@ Provide a strictly factual, concise response based on the results above. Use ONL
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      temperature: 0.0, // Lower temperature for more consistent, factual responses
+      temperature: 0.2, // Slightly higher for more natural, friendly responses
       max_tokens: 400
     });
 
