@@ -30,10 +30,12 @@ export function getBestArtworkImage(images: AlbumArtworkSearchResult['images']):
   if (!images || images.length === 0) return null;
   
   // Sort by quality and return the best one
-  const qualityScores = { excellent: 4, good: 3, acceptable: 2, low: 1, unknown: 0 };
+  const qualityScores: Record<string, number> = { excellent: 4, good: 3, acceptable: 2, low: 1, unknown: 0 };
   
   const sortedImages = [...images].sort((a, b) => {
-    const qualityDiff = qualityScores[b.estimatedQuality] - qualityScores[a.estimatedQuality];
+    const qualityA = qualityScores[a.estimatedQuality] ?? qualityScores.unknown;
+    const qualityB = qualityScores[b.estimatedQuality] ?? qualityScores.unknown;
+    const qualityDiff = qualityB - qualityA;
     if (qualityDiff !== 0) return qualityDiff;
     
     // If quality is same, prefer more square images

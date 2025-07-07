@@ -21,11 +21,26 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<Map<string, any>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<ChatMessageType[]>([]);
 
   // Clear memory when component mounts (start fresh)
   useEffect(() => {
     memoryManager.clearMessages();
+    
+    // Cleanup blob URLs when component unmounts
+    return () => {
+      messagesRef.current.forEach((message: ChatMessageType) => {
+        if (message.imageUrl && message.imageUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(message.imageUrl);
+        }
+      });
+    };
   }, []);
+
+  // Update messages ref when messages change
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -35,18 +50,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   // Clean up blob URLs when component unmounts
   useEffect(() => {
     return () => {
-      // Clean up all blob URLs in messages
-      messages.forEach(message => {
-        if (message.imageUrl && message.imageUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(message.imageUrl);
-        }
-      });
-      // Clean up selected image blob URL
+      // Clean up selected image blob URL only
       if (selectedImageUrl && selectedImageUrl.startsWith('blob:')) {
         URL.revokeObjectURL(selectedImageUrl);
       }
     };
-  }, [messages, selectedImageUrl]);
+  }, [selectedImageUrl]);
 
   const handleImageSelect = (file: File) => {
     // Clean up previous blob URL if it exists
@@ -111,7 +120,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setInputValue('');
     setSelectedImage(null);
     
-    // Keep the blob URL for the message preview - don't revoke it here
+    // Don't revoke the blob URL here - it's now owned by the message
     setSelectedImageUrl(null);
     
     // Add user message to short-term memory
