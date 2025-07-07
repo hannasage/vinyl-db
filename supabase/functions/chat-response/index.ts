@@ -67,7 +67,7 @@ const TOOLS = {
 };
 
 // Function to plan operations using GPT
-async function planOperations(message: string, conversationContext?: string): Promise<Operation[]> {
+async function planOperations(message: string, conversationContext?: string, previousResults?: any[]): Promise<Operation[]> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -82,20 +82,33 @@ async function planOperations(message: string, conversationContext?: string): Pr
       `- "${tool.name}": ${tool.description}`
     ).join('\n');
 
-    const systemPrompt = `You are a helpful assistant that plans operations for vinyl collection management.
+    const systemPrompt = `You are an intelligent planning assistant for vinyl collection management. You excel at reasoning, understanding context, and creating sophisticated operation plans.
+
+CRITICAL: You must ALWAYS respond with ONLY valid JSON. Never include explanatory text, reasoning, or natural language responses.
 
 Your job is to:
-1. Analyze the user's request
+1. Analyze the user's request with deep understanding of intent and context
 2. Consider the conversation context to understand references and maintain continuity
-3. Break down complex operations into sequential tool calls
-4. Create an array of operations to execute
+3. Break down complex operations into logical, sequential tool calls
+4. Create an array of operations to execute with proper dependencies
 5. IMPORTANT: For add/remove operations, mark them as requiring confirmation
 6. CRITICAL: Distinguish between album names and artist names in queries
+7. NEW: Support conditional logic for complex requests like "if I don't have X, add it"
+8. REASONING: Think step-by-step about what the user wants and how to achieve it efficiently
+9. REFLECTION: If previous results are provided, analyze them to decide if more operations are needed
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
 
 Use this context to understand references like "her new album" or "that artist" and maintain conversation continuity.` : ''}
+
+${previousResults && previousResults.length > 0 ? `PREVIOUS RESULTS:
+${previousResults.map((result, index) => 
+  `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${result.success ? 'SUCCESS' : 'FAILED'}
+   ${result.success ? JSON.stringify(result.result, null, 2) : `Error: ${result.error}`}`
+).join('\n\n')}
+
+Analyze these results and decide if the user's request has been satisfied or if additional operations are needed.` : ''}
 
 Available tools:
 ${toolDescriptions}
@@ -117,6 +130,16 @@ GUIDELINES:
 - For collection queries, use vinyl_collection_query
 - For adding albums, use vinyl_add_album and set requiresConfirmation: true
 - For removing albums, use vinyl_remove_album and set requiresConfirmation: true
+
+REFLECTIVE PLANNING:
+- For "if I don't have X, add it" requests:
+  1. First iteration: Plan ONLY vinyl_collection_query to check if album exists
+  2. Second iteration: If album not found, plan vinyl_add_album; if found, return empty operations
+- For "if I have X, remove it" requests:
+  1. First iteration: Plan ONLY vinyl_collection_query to check if album exists
+  2. Second iteration: If album found, plan vinyl_remove_album; if not found, return empty operations
+- For simple queries like "do I have X":
+  1. First iteration: Plan ONLY vinyl_collection_query, then return empty operations (request satisfied)
 
 ARTIST vs ALBUM DETECTION:
 - If the user asks "do I have [name]", analyze if [name] is likely an artist or album
@@ -162,9 +185,64 @@ Response: {
   ]
 }
 
+User: "If I don't have Dark Side of the Moon by Pink Floyd, add it to my collection"
+Response (First iteration): {
+  "operations": [
+    {
+      "tool": "vinyl_collection_query",
+      "parameters": { "albumName": "Dark Side of the Moon", "artistName": "Pink Floyd" },
+      "description": "Check if Dark Side of the Moon by Pink Floyd exists in collection",
+      "requiresConfirmation": false
+    }
+  ]
+}
+
+Response (Second iteration - if album not found): {
+  "operations": [
+    {
+      "tool": "vinyl_add_album",
+      "parameters": { "albumName": "Dark Side of the Moon", "artistName": "Pink Floyd" },
+      "description": "Add Dark Side of the Moon by Pink Floyd to collection",
+      "requiresConfirmation": true
+    }
+  ]
+}
+
+Response (Second iteration - if album found): {
+  "operations": []
+}
+
 Now analyze this user request: "${message}"
 
-Return only the JSON object with the operations array.`;
+${previousResults && previousResults.length > 0 ? `
+PREVIOUS RESULTS:
+${previousResults.map((result, index) => 
+  `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${result.success ? 'SUCCESS' : 'FAILED'}
+   ${result.success ? JSON.stringify(result.result, null, 2) : `Error: ${result.error}`}`
+).join('\n\n')}
+
+REFLECTION ANALYSIS:
+Analyze the previous results and the original user request to decide what to do next.
+
+For "if I don't have X, add it" requests:
+- If the query result shows found: false → Plan the add operation (user wants it added since they don't have it)
+- If the query result shows found: true → Return empty operations (user already has it, no action needed)
+
+For "do I have X" requests:
+- Return empty operations (query answered the question, request satisfied)
+
+For direct "add X" requests:
+- Return empty operations (should have been handled in first iteration)
+
+DECISION: Based on the above analysis, either return an empty operations array (request satisfied) or plan the next operation needed.
+
+CRITICAL: You must respond with ONLY a valid JSON object. Do not include any explanatory text, reasoning, or natural language response. The response must be parseable JSON.
+
+Example valid responses:
+{"operations": []}  // for no more operations needed
+{"operations": [{"tool": "vinyl_add_album", "parameters": {...}, "description": "...", "requiresConfirmation": true}]}  // for planning next operation` : ''}
+
+Return only the JSON object with the operations array. Do not include any other text or explanation.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
@@ -184,10 +262,10 @@ Return only the JSON object with the operations array.`;
     messages.push({ role: 'user', content: message });
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini', // Better reasoning and creativity for complex planning
       messages,
-      temperature: 0.1,
-      max_tokens: 500
+      temperature: 0.1, // Lower temperature for more consistent planning
+      max_tokens: 800 // More tokens for complex conditional logic
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -196,13 +274,25 @@ Return only the JSON object with the operations array.`;
       return [];
     }
 
-    const parsed = JSON.parse(content);
+    console.log(`[chat-response] Planning response:`, content);
     
-    if (parsed.operations && Array.isArray(parsed.operations)) {
-      return parsed.operations;
-    }
+    try {
+      const parsed = JSON.parse(content);
+      
+      if (parsed.operations && Array.isArray(parsed.operations)) {
+        console.log(`[chat-response] Planned ${parsed.operations.length} operations:`, parsed.operations.map(op => op.description));
+        return parsed.operations;
+      }
 
-    return [];
+      console.log(`[chat-response] No operations planned or invalid response format`);
+      return [];
+    } catch (parseError) {
+      console.error('Error parsing planning response as JSON:', parseError);
+      console.error('Raw response content:', content);
+      console.error('Response length:', content.length);
+      console.error('First 200 characters:', content.substring(0, 200));
+      return [];
+    }
   } catch (error) {
     console.error('Error planning operations:', error);
     return [];
@@ -504,6 +594,93 @@ async function executeVinylRemoveAlbum(params: any, supabase: any): Promise<any>
   };
 }
 
+
+
+// Function to execute operations with reflection and planning
+async function executeOperationsWithReflection(
+  userMessage: string, 
+  conversationContext: string, 
+  supabase: any
+): Promise<{results: ExecutionResult[], requiresConfirmation: boolean, confirmationOperations: Operation[]}> {
+  const results: ExecutionResult[] = [];
+  let iteration = 0;
+  const maxIterations = 5; // Prevent infinite loops
+  
+  while (iteration < maxIterations) {
+    console.log(`[chat-response] Planning iteration ${iteration + 1}`);
+    
+    // Plan next operations based on current results
+    const operations = await planOperations(userMessage, conversationContext, results);
+    
+    if (operations.length === 0) {
+      console.log(`[chat-response] No more operations planned after iteration ${iteration + 1} - user request satisfied`);
+      break;
+    }
+    
+    console.log(`[chat-response] Planned ${operations.length} operation(s) for iteration ${iteration + 1}:`, 
+      operations.map(op => op.description));
+    
+    // Check if any operations require confirmation
+    const operationsRequiringConfirmation = operations.filter(op => op.requiresConfirmation);
+    const operationsToExecute = operations.filter(op => !op.requiresConfirmation);
+    
+    if (operationsRequiringConfirmation.length > 0) {
+      console.log(`[chat-response] Found ${operationsRequiringConfirmation.length} operations requiring confirmation`);
+      // Return the results so far and the confirmation requests
+      return {
+        results,
+        requiresConfirmation: true,
+        confirmationOperations: operationsRequiringConfirmation
+      };
+    }
+    
+    // Execute operations that don't require confirmation
+    if (operationsToExecute.length > 0) {
+      for (let i = 0; i < operationsToExecute.length; i++) {
+        const operation = operationsToExecute[i];
+        
+        console.log(`[chat-response] Executing operation ${i + 1}/${operationsToExecute.length}: ${operation.description}`);
+        const result = await executeOperation(operation, supabase);
+        
+        const executionResult = {
+          operation,
+          success: result.success,
+          result: result.result,
+          error: result.error
+        };
+        
+        results.push(executionResult);
+        
+        // Handle alternative searches
+        if (result.shouldRetryWithAlternative && result.alternativeSearch) {
+          console.log(`[chat-response] Trying alternative search: ${result.alternativeSearch.description}`);
+          const alternativeResult = await executeOperation(result.alternativeSearch, supabase);
+          results.push({
+            operation: result.alternativeSearch,
+            success: alternativeResult.success,
+            result: alternativeResult.result,
+            error: alternativeResult.error
+          });
+        }
+      }
+    }
+    
+    iteration++;
+  }
+  
+  if (iteration >= maxIterations) {
+    console.log(`[chat-response] Reached maximum iterations (${maxIterations}), stopping execution`);
+  }
+  
+  return {
+    results,
+    requiresConfirmation: false,
+    confirmationOperations: []
+  };
+}
+
+
+
 // Function to execute operations directly
 async function executeOperation(operation: Operation, supabase: any): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
   console.log(`[chat-response] Executing operation: ${operation.tool} with params:`, operation.parameters);
@@ -600,14 +777,15 @@ async function formatResponseWithGPT(
       return `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${status}\n${details}`;
     }).join('\n\n');
 
-    const systemPrompt = `You are a helpful assistant that formats responses for vinyl collection queries.
+    const systemPrompt = `You are a precise summarization assistant for vinyl collection operations. Your strength is creating clear, factual, and concise responses from raw data.
 
 Your job is to:
 1. Take the raw execution results from database operations
-2. Format them into natural, conversational responses
-3. Be concise and factual
+2. Summarize them into natural, conversational responses
+3. Be concise, factual, and accurate
 4. Use the exact album titles and artist names from the results
-5. Don't add extra commentary or questions
+5. Don't add extra commentary, opinions, or questions
+6. Focus on clarity and completeness of information
 
 ${conversationContext ? `CONVERSATION CONTEXT:
 ${conversationContext}
@@ -620,6 +798,7 @@ RESPONSE FORMATS:
 - Alternative searches: "I searched for [original query] and found nothing, but when I searched for [alternative query], I found [results]"
 - Add operations: "Successfully added [album] by [artist] to your collection"
 - Remove operations: "Successfully removed [album] by [artist] from your collection"
+- Conditional operations: "I checked for [album] by [artist] and [found/didn't find] it. [If found: 'Since you already have it, no action was needed.' / If not found: 'I've added it to your collection.']"
 - Batch operations: "Completed [operation]: [summary of results]"
 - Errors: "Sorry, I couldn't [action] because [reason]"
 
@@ -646,10 +825,10 @@ Please provide a strictly factual, concise response based on this information. D
     }
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini', // Better summarization and consistency for response formatting
       messages,
-      temperature: 0.7,
-      max_tokens: 500
+      temperature: 0.3, // Lower temperature for more consistent, factual responses
+      max_tokens: 400 // Sufficient for concise summaries
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -776,12 +955,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Plan operations
-    const operations = await planOperations(userMessage, conversationContext);
+    // Execute operations with reflection and planning
+    const executionResult = await executeOperationsWithReflection(userMessage, conversationContext, supabase);
     
-    if (operations.length === 0) {
+    // Handle case where no operations were planned
+    if (executionResult.results.length === 0 && !executionResult.requiresConfirmation) {
       const response = {
-        message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'Do I have these albums: Dark Side of the Moon, Abbey Road?'",
+        message: "Hi! I can help you check your vinyl collection. Try asking me something like 'Do I have Dark Side of the Moon by Pink Floyd?' or 'If I don't have Dark Side of the Moon, add it to my collection.'",
         timestamp: new Date().toISOString(),
         type: 'general'
       };
@@ -794,14 +974,10 @@ Deno.serve(async (req) => {
         },
       });
     }
-
-    // Check if any operations require confirmation
-    const operationsRequiringConfirmation = operations.filter(op => op.requiresConfirmation);
-    const operationsToExecute = operations.filter(op => !op.requiresConfirmation);
     
-    if (operationsRequiringConfirmation.length > 0) {
-      // Return confirmation requests instead of executing
-      const confirmationRequests = operationsRequiringConfirmation.map((op, index) => {
+    if (executionResult.requiresConfirmation) {
+      // Return confirmation requests
+      const confirmationRequests = executionResult.confirmationOperations.map((op, index) => {
         const operationId = `op_${Date.now()}_${index}`;
         const action = op.tool === 'vinyl_add_album' ? 'add' : 'remove';
         
@@ -819,12 +995,12 @@ Deno.serve(async (req) => {
       });
       
       const response = {
-        message: `I found ${operationsRequiringConfirmation.length} album(s) that need your confirmation before ${operationsRequiringConfirmation[0].tool === 'vinyl_add_album' ? 'adding' : 'removing'} from your collection. Please review the details below.`,
+        message: `I found ${executionResult.confirmationOperations.length} album(s) that need your confirmation before ${executionResult.confirmationOperations[0].tool === 'vinyl_add_album' ? 'adding' : 'removing'} from your collection. Please review the details below.`,
         timestamp: new Date().toISOString(),
         type: 'album_confirmation',
         data: {
           confirmations: confirmationRequests,
-          pendingOperations: operationsRequiringConfirmation
+          pendingOperations: executionResult.confirmationOperations
         }
       };
       
@@ -837,64 +1013,20 @@ Deno.serve(async (req) => {
       });
     }
     
-    // Execute operations that don't require confirmation
-    if (operationsToExecute.length > 0) {
-      console.log(`Executing ${operationsToExecute.length} operation(s):`, operationsToExecute.map(op => op.description));
-      
-      const results: ExecutionResult[] = [];
-      
-      for (const operation of operationsToExecute) {
-        const result = await executeOperation(operation, supabase);
-        results.push({
-          operation,
-          success: result.success,
-          result: result.result,
-          error: result.error
-        });
-        
-        // Handle alternative searches
-        if (result.shouldRetryWithAlternative && result.alternativeSearch) {
-          console.log(`[chat-response] Trying alternative search: ${result.alternativeSearch.description}`);
-          const alternativeResult = await executeOperation(result.alternativeSearch, supabase);
-          results.push({
-            operation: result.alternativeSearch,
-            success: alternativeResult.success,
-            result: alternativeResult.result,
-            error: alternativeResult.error
-          });
-        }
-      }
-      
-      // Format response using GPT
-      const formattedMessage = await formatResponseWithGPT(userMessage, results, conversationContext);
-      
-      const responseType = operationsToExecute.length === 1 ? 'single_step' : 'multi_step';
-      
-      return new Response(JSON.stringify({
-        message: formattedMessage,
-        timestamp: new Date().toISOString(),
-        type: responseType,
-        data: {
-          operations: operationsToExecute.length,
-          results
-        }
-      }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    }
+    // Format response using GPT
+    const formattedMessage = await formatResponseWithGPT(userMessage, executionResult.results, conversationContext);
     
-    // No operations to execute
-    const response = {
-      message: "I understand your request but couldn't determine what action to take. Please try rephrasing your question.",
+    const responseType = executionResult.results.length === 1 ? 'single_step' : 'multi_step';
+    
+    return new Response(JSON.stringify({
+      message: formattedMessage,
       timestamp: new Date().toISOString(),
-      type: 'general'
-    };
-
-    return new Response(JSON.stringify(response), {
+      type: responseType,
+      data: {
+        operations: executionResult.results.length,
+        results: executionResult.results
+      }
+    }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
