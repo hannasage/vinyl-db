@@ -5,6 +5,113 @@ import AlbumAction from './AlbumAction';
 import BatchProgress from './BatchProgress';
 import AlbumConfirmationCard from './AlbumConfirmationCard';
 
+// Utility function to parse and render formatted text
+const renderFormattedText = (text: string, isUser: boolean) => {
+  if (!text) return null;
+
+  // Helper function to process inline formatting
+  const processInlineFormatting = (line: string, isUser: boolean) => {
+    // Bold text: **text** or __text__
+    let processed = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    processed = processed.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    
+    // Italic text: *text* or _text_
+    processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    processed = processed.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    return processed;
+  };
+
+  // Split text into lines to process lists
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let currentList: string[] = [];
+  let inList = false;
+  let isNumberedList = false;
+
+  const flushList = (isNumbered: boolean = false) => {
+    if (currentList.length > 0) {
+      const ListComponent = isNumbered ? 'ol' : 'ul';
+      const listClassName = isNumbered ? 'list-decimal' : 'list-disc';
+      
+      elements.push(
+        React.createElement(ListComponent, {
+          key: `list-${elements.length}`,
+          className: `${listClassName} list-inside space-y-1 my-2`
+        }, currentList.map((item, index) => {
+          const cleanItem = isNumbered ? item.replace(/^\d+\.\s*/, '') : item.replace(/^[-*•]\s*/, '');
+          const formattedItem = processInlineFormatting(cleanItem, isUser);
+          return (
+            <li key={index} className="text-sm" dangerouslySetInnerHTML={{ __html: formattedItem }} />
+          );
+        }))
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+    
+    // Check for bullet points
+    if (/^[-*•]\s/.test(trimmedLine)) {
+      if (!inList) {
+        flushList(isNumberedList);
+        inList = true;
+        isNumberedList = false;
+      } else if (isNumberedList) {
+        // Switch from numbered to bullet list
+        flushList(true);
+        inList = true;
+        isNumberedList = false;
+      }
+      currentList.push(trimmedLine);
+    }
+    // Check for numbered lists
+    else if (/^\d+\.\s/.test(trimmedLine)) {
+      if (!inList) {
+        flushList(isNumberedList);
+        inList = true;
+        isNumberedList = true;
+      } else if (!isNumberedList) {
+        // Switch from bullet to numbered list
+        flushList(false);
+        inList = true;
+        isNumberedList = true;
+      }
+      currentList.push(trimmedLine);
+    }
+    // Regular text line
+    else {
+      if (inList) {
+        flushList(isNumberedList);
+        inList = false;
+        isNumberedList = false;
+      }
+      
+      if (trimmedLine) {
+        const formattedLine = processInlineFormatting(trimmedLine, isUser);
+        elements.push(
+          <p key={`text-${index}`} className="text-sm mb-2 last:mb-0" 
+             dangerouslySetInnerHTML={{ __html: formattedLine }} />
+        );
+      } else if (index < lines.length - 1) {
+        // Add spacing for empty lines (but not at the end)
+        elements.push(<div key={`spacer-${index}`} className="h-2" />);
+      }
+    }
+  });
+
+  // Flush any remaining list
+  if (inList) {
+    flushList(isNumberedList);
+  }
+
+  return elements.length > 0 ? elements : (
+    <p className="text-sm">{text}</p>
+  );
+};
+
 export interface ChatMessageProps {
   id: string;
   content: string;
@@ -111,9 +218,9 @@ export default function ChatMessage({
         
         {/* Text Content */}
         {content && (
-          <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`}>
-            {content}
-          </p>
+          <div className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'} [&_strong]:font-semibold [&_em]:italic [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-1 [&_*]:text-inherit [&_p]:text-inherit [&_li]:text-inherit [&_strong]:text-inherit [&_em]:text-inherit`}>
+            {renderFormattedText(content, isUser)}
+          </div>
         )}
         
         {/* Timestamp */}

@@ -37,22 +37,91 @@ interface ConversationHistoryProps {
   onSessionSelect: (sessionId: string) => void;
   onNewSession: () => void;
   currentSessionId: string | null;
+  refreshTrigger?: number; // Add this to trigger refreshes
+  currentMessageCount?: number; // Add this for real-time message count updates
+  titleUpdateTrigger?: number; // Add this to trigger title updates
 }
 
 export default function ConversationHistory({
   onSessionSelect,
   onNewSession,
-  currentSessionId
+  currentSessionId,
+  refreshTrigger = 0,
+  currentMessageCount = 0,
+  titleUpdateTrigger = 0
 }: ConversationHistoryProps) {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<ConversationSession[]>([]);
+  const [newSessionId, setNewSessionId] = useState<string | null>(null);
+  const [updatingMessageCount, setUpdatingMessageCount] = useState<string | null>(null);
+  const [updatingTitle, setUpdatingTitle] = useState<string | null>(null);
 
-  // Load recent sessions on component mount
+  // Load recent sessions on component mount and when refreshTrigger changes
   useEffect(() => {
     loadRecentSessions();
-  }, []);
+  }, [refreshTrigger]);
+
+  // Track new sessions for animation
+  useEffect(() => {
+    if (refreshTrigger > 0 && currentSessionId) {
+      // Check if this is a new session (not in our current list)
+      const isNewSession = !sessions.find(s => s.id === currentSessionId);
+      if (isNewSession) {
+        setNewSessionId(currentSessionId);
+        // Remove the "new" status after animation
+        setTimeout(() => setNewSessionId(null), 1000);
+      }
+    }
+  }, [refreshTrigger, currentSessionId, sessions]);
+
+  // Track message count updates for animation
+  useEffect(() => {
+    if (currentSessionId && currentMessageCount > 0) {
+      // Find the current session in our list
+      const currentSession = sessions.find(s => s.id === currentSessionId);
+      if (currentSession && currentMessageCount !== currentSession.messageCount) {
+        // Update the session in our local state
+        setSessions(prev => prev.map(s => 
+          s.id === currentSessionId 
+            ? { ...s, messageCount: currentMessageCount }
+            : s
+        ));
+        
+        // Trigger animation for message count update
+        setUpdatingMessageCount(currentSessionId);
+        setTimeout(() => setUpdatingMessageCount(null), 600);
+      }
+    }
+  }, [currentMessageCount, currentSessionId]);
+
+  // Track title updates for animation
+  useEffect(() => {
+    if (titleUpdateTrigger > 0 && currentSessionId) {
+      // Trigger animation for title update
+      setUpdatingTitle(currentSessionId);
+      setTimeout(() => setUpdatingTitle(null), 600);
+      
+      // Fetch the updated session title from the database
+      const updateSessionTitle = async () => {
+        try {
+          const updatedSession = await enhancedMemoryManager.getSessionById(currentSessionId);
+          if (updatedSession) {
+            setSessions(prev => prev.map(s => 
+              s.id === currentSessionId 
+                ? { ...s, title: updatedSession.title }
+                : s
+            ));
+          }
+        } catch (error) {
+          console.error('Error updating session title:', error);
+        }
+      };
+      
+      updateSessionTitle();
+    }
+  }, [titleUpdateTrigger, currentSessionId]);
 
   const loadRecentSessions = async () => {
     try {
@@ -83,17 +152,7 @@ export default function ConversationHistory({
     }
   };
 
-  const handleArchiveSession = async (sessionId: string) => {
-    try {
-      await enhancedMemoryManager.archiveSession(sessionId);
-      // Reload sessions to reflect the change
-      await loadRecentSessions();
-      // Clear search results if the archived session was in them
-      setSearchResults(prev => prev.filter(session => session.id !== sessionId));
-    } catch (error) {
-      console.error('Error archiving session:', error);
-    }
-  };
+
 
   const displaySessions = searchQuery.trim() ? searchResults : sessions;
 
@@ -167,35 +226,47 @@ export default function ConversationHistory({
             {displaySessions.map((session) => (
               <div
                 key={session.id}
-                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-300 ease-in-out ${
                   currentSessionId === session.id
                     ? 'bg-blue-100 border border-blue-200'
                     : 'hover:bg-gray-100'
+                } ${
+                  newSessionId === session.id
+                    ? 'animate-pulse bg-green-50 border-green-200 shadow-lg'
+                    : ''
+                } ${
+                  updatingMessageCount === session.id
+                    ? 'bg-blue-50 border-blue-300 shadow-sm'
+                    : ''
+                } ${
+                  updatingTitle === session.id
+                    ? 'bg-green-50 border-green-300 shadow-sm'
+                    : ''
                 }`}
+                style={{
+                  animationDelay: newSessionId === session.id ? '0ms' : undefined,
+                  transform: newSessionId === session.id ? 'scale(1.02)' : 'scale(1)',
+                }}
                 onClick={() => onSessionSelect(session.id)}
               >
                 {/* Session Title */}
                 <div className="flex items-start justify-between">
-                  <h3 className="text-base font-medium text-gray-900 truncate flex-1">
+                  <h3 className={`text-base font-medium text-gray-900 truncate flex-1 transition-all duration-300 ease-in-out ${
+                    updatingTitle === session.id ? 'text-blue-600 font-semibold' : ''
+                  }`}>
                     {session.title || 'Untitled Conversation'}
                   </h3>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleArchiveSession(session.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-gray-600 transition-opacity"
-                    title="Archive conversation"
-                  >
-                    <ArchiveBoxIcon className="w-4 h-4" />
-                  </button>
                 </div>
 
                 {/* Session Metadata */}
                 <div className="flex items-center text-sm text-gray-500 mt-1 space-x-3">
                   <div className="flex items-center">
                     <ChatBubbleLeftRightIcon className="w-4 h-4 mr-1" />
-                    <span>{session.messageCount} messages</span>
+                    <span className={`transition-all duration-300 ease-in-out ${
+                      updatingMessageCount === session.id ? 'text-blue-600 font-semibold scale-110' : ''
+                    }`}>
+                      {currentSessionId === session.id ? currentMessageCount : session.messageCount} messages
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <ClockIcon className="w-4 h-4 mr-1" />
@@ -206,6 +277,16 @@ export default function ConversationHistory({
                 {/* Active indicator */}
                 {currentSessionId === session.id && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-lg"></div>
+                )}
+                
+                {/* Message count update indicator */}
+                {updatingMessageCount === session.id && (
+                  <div className="absolute right-2 top-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                )}
+                
+                {/* Title update indicator */}
+                {updatingTitle === session.id && (
+                  <div className="absolute right-2 top-6 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 )}
               </div>
             ))}

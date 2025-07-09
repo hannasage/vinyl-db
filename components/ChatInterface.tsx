@@ -29,6 +29,10 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [titleUpdateTrigger, setTitleUpdateTrigger] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Initialize session and load conversation history
   // useEffect(() => {
@@ -109,6 +113,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       try {
         sessionId = await enhancedMemoryManager.createSession();
         setCurrentSessionId(sessionId);
+        // Trigger sidebar refresh with animation for new session
+        setRefreshTrigger(prev => prev + 1);
       } catch {
         setError('Failed to create new conversation session');
         return;
@@ -439,6 +445,9 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       setPendingConfirmations(new Map());
       enhancedMemoryManager.clearShortTermMemory();
       setError(null);
+      
+      // Trigger sidebar refresh with animation
+      setRefreshTrigger(prev => prev + 1);
     } catch {
       console.error('Error creating new session:');
       setError('Failed to create new conversation session');
@@ -506,6 +515,40 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     }
   }, [currentSessionId]);
 
+  // Reset refresh trigger after animation completes
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      const timer = setTimeout(() => {
+        setRefreshTrigger(0);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [refreshTrigger]);
+
+  // Reset title update trigger after animation completes
+  useEffect(() => {
+    if (titleUpdateTrigger > 0) {
+      const timer = setTimeout(() => {
+        setTitleUpdateTrigger(0);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [titleUpdateTrigger]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showMenu) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
   // Handle title edit
   const handleTitleSave = async () => {
     if (!currentSessionId) return;
@@ -514,8 +557,26 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setIsEditingTitle(false);
     try {
       await enhancedMemoryManager.updateSessionTitle(currentSessionId, newTitle);
+      // Trigger sidebar title update
+      setTitleUpdateTrigger(prev => prev + 1);
     } catch {
       setError('Failed to update session title');
+    }
+  };
+
+  // Handle session deletion
+  const handleDeleteSession = async () => {
+    if (!currentSessionId) return;
+    
+    try {
+      await enhancedMemoryManager.archiveSession(currentSessionId);
+      setShowDeleteConfirm(false);
+      setShowMenu(false);
+      
+      // Create a new session to replace the deleted one
+      await handleNewSession();
+    } catch {
+      setError('Failed to delete conversation');
     }
   };
 
@@ -537,9 +598,9 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         className={[
           'fixed top-0 left-0 h-full w-4/5 max-w-xs bg-white border-r border-gray-200 shadow-lg',
           'sm:static sm:w-80 sm:max-w-none sm:z-0 sm:shadow-none',
-          'transition-transform duration-300 ease-in-out',
-          showSidebar ? 'translate-x-0' : '-translate-x-full',
-          'sm:translate-x-0',
+          'transition-all duration-300 ease-in-out',
+          showSidebar ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0',
+          'sm:translate-x-0 sm:opacity-100',
           'z-50 sm:z-0'
         ].join(' ')}
       >
@@ -558,44 +619,85 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           onSessionSelect={handleSessionSelect}
           onNewSession={handleNewSession}
           currentSessionId={currentSessionId}
+          refreshTrigger={refreshTrigger}
+          currentMessageCount={messages.length}
+          titleUpdateTrigger={titleUpdateTrigger}
         />
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Header with editable title and timestamp */}
-        <div className="border-b border-gray-200 bg-white sticky top-0 z-30">
+        <div className={`border-b border-gray-200 bg-white sticky top-0 z-30 transition-all duration-300 ease-in-out ${
+          refreshTrigger > 0 ? 'bg-blue-50' : 'bg-white'
+        }`}>
           <div className="flex flex-col p-4">
-            <div className="flex items-center space-x-4">
-              {/* Menu button for mobile */}
-              <button
-                onClick={() => setShowSidebar(true)}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
-                title="Show sidebar"
-                aria-label="Show sidebar"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              {isEditingTitle ? (
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={e => setEditTitle(e.target.value)}
-                  onBlur={handleTitleSave}
-                  onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); }}
-                  className="text-xl font-semibold text-gray-900 truncate bg-white border-b border-blue-400 focus:outline-none px-2 py-1 min-w-[120px]"
-                  autoFocus
-                />
-              ) : (
-                <h1
-                  className="text-xl font-semibold text-gray-900 truncate cursor-pointer hover:underline"
-                  onClick={() => setIsEditingTitle(true)}
-                  title="Click to edit title"
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {/* Menu button for mobile */}
+                <button
+                  onClick={() => setShowSidebar(true)}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
+                  title="Show sidebar"
+                  aria-label="Show sidebar"
                 >
-                  {sessionDetails?.title || 'Vinyl Collection Assistant'}
-                </h1>
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                {isEditingTitle ? (
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    onBlur={handleTitleSave}
+                    onKeyDown={e => { if (e.key === 'Enter') handleTitleSave(); }}
+                    className="text-xl font-semibold text-gray-900 truncate bg-white border-b border-blue-400 focus:outline-none px-2 py-1 min-w-[120px]"
+                    autoFocus
+                  />
+                ) : (
+                  <h1
+                    className="text-xl font-semibold text-gray-900 truncate cursor-pointer hover:underline"
+                    onClick={() => setIsEditingTitle(true)}
+                    title="Click to edit title"
+                  >
+                    {sessionDetails?.title || 'Vinyl Collection Assistant'}
+                  </h1>
+                )}
+              </div>
+              
+              {/* 3-dot menu */}
+              {currentSessionId && !isEditingTitle && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="More options"
+                    aria-label="More options"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                  
+                  {/* Dropdown menu */}
+                  {showMenu && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(true);
+                          setShowMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>Delete conversation</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             {sessionDetails && (
@@ -706,6 +808,39 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Conversation</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete "{sessionDetails?.title || 'Untitled Conversation'}"? This action cannot be undone.
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSession}
+                className="flex-1 px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
