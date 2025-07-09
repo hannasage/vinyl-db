@@ -325,7 +325,7 @@ export class EnhancedMemoryManager {
   }
 
   /**
-   * Archive a session (mark as inactive)
+   * Archive a conversation session (mark as inactive)
    */
   async archiveSession(sessionId: string): Promise<void> {
     try {
@@ -337,6 +337,54 @@ export class EnhancedMemoryManager {
       if (error) throw error;
     } catch (error) {
       console.error('Error archiving session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a conversation session and all its messages
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    try {
+      // Delete all messages in the session first (cascade should handle this, but being explicit)
+      const { error: messagesError } = await this.supabase
+        .from('conversation_messages')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (messagesError) throw messagesError;
+
+      // Delete all embeddings for the session
+      const { error: embeddingsError } = await this.supabase
+        .from('conversation_embeddings')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (embeddingsError) throw embeddingsError;
+
+      // Delete all feedback for the session
+      const { error: feedbackError } = await this.supabase
+        .from('conversation_feedback')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (feedbackError) throw feedbackError;
+
+      // Delete the session itself
+      const { error: sessionError } = await this.supabase
+        .from('conversation_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (sessionError) throw sessionError;
+
+      // If this was the current session, clear it
+      if (this.currentSessionId === sessionId) {
+        this.currentSessionId = null;
+        this.clearShortTermMemory();
+      }
+    } catch (error) {
+      console.error('Error deleting session:', error);
       throw error;
     }
   }

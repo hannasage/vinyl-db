@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { enhancedMemoryManager, ConversationSession } from '../utils/agent/memory';
+
 // Icons as inline SVG components
 const PlusIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -15,8 +16,6 @@ const MagnifyingGlassIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-
-
 const ClockIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -29,50 +28,40 @@ const ChatBubbleLeftRightIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
 interface ConversationHistoryProps {
   onSessionSelect: (sessionId: string) => void;
   onNewSession: () => void;
+  onDeleteRequest?: (sessionId: string) => void;
   currentSessionId: string | null;
-  refreshTrigger?: number; // Add this to trigger refreshes
-  currentMessageCount?: number; // Add this for real-time message count updates
-  titleUpdateTrigger?: number; // Add this to trigger title updates
+  refreshTrigger?: number;
+  currentMessageCount?: number;
 }
 
 export default function ConversationHistory({
   onSessionSelect,
   onNewSession,
+  onDeleteRequest,
   currentSessionId,
   refreshTrigger = 0,
-  currentMessageCount = 0,
-  titleUpdateTrigger = 0
+  currentMessageCount = 0
 }: ConversationHistoryProps) {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<ConversationSession[]>([]);
-  const [newSessionId, setNewSessionId] = useState<string | null>(null);
-  const [updatingMessageCount, setUpdatingMessageCount] = useState<string | null>(null);
-  const [updatingTitle, setUpdatingTitle] = useState<string | null>(null);
 
   // Load recent sessions on component mount and when refreshTrigger changes
   useEffect(() => {
     loadRecentSessions();
   }, [refreshTrigger]);
 
-  // Track new sessions for animation
-  useEffect(() => {
-    if (refreshTrigger > 0 && currentSessionId) {
-      // Check if this is a new session (not in our current list)
-      const isNewSession = !sessions.find(s => s.id === currentSessionId);
-      if (isNewSession) {
-        setNewSessionId(currentSessionId);
-        // Remove the "new" status after animation
-        setTimeout(() => setNewSessionId(null), 1000);
-      }
-    }
-  }, [refreshTrigger, currentSessionId, sessions]);
-
-  // Track message count updates for animation
+  // Update message count in local state when it changes
   useEffect(() => {
     if (currentSessionId && currentMessageCount > 0) {
       // Find the current session in our list
@@ -84,40 +73,9 @@ export default function ConversationHistory({
             ? { ...s, messageCount: currentMessageCount }
             : s
         ));
-        
-        // Trigger animation for message count update
-        setUpdatingMessageCount(currentSessionId);
-        setTimeout(() => setUpdatingMessageCount(null), 600);
       }
     }
   }, [currentMessageCount, currentSessionId, sessions]);
-
-  // Track title updates for animation
-  useEffect(() => {
-    if (titleUpdateTrigger > 0 && currentSessionId) {
-      // Trigger animation for title update
-      setUpdatingTitle(currentSessionId);
-      setTimeout(() => setUpdatingTitle(null), 600);
-      
-      // Fetch the updated session title from the database
-      const updateSessionTitle = async () => {
-        try {
-          const updatedSession = await enhancedMemoryManager.getSessionById(currentSessionId);
-          if (updatedSession) {
-            setSessions(prev => prev.map(s => 
-              s.id === currentSessionId 
-                ? { ...s, title: updatedSession.title }
-                : s
-            ));
-          }
-        } catch (error) {
-          console.error('Error updating session title:', error);
-        }
-      };
-      
-      updateSessionTitle();
-    }
-  }, [titleUpdateTrigger, currentSessionId]);
 
   const loadRecentSessions = async () => {
     try {
@@ -147,8 +105,6 @@ export default function ConversationHistory({
       setIsLoading(false);
     }
   };
-
-
 
   const displaySessions = searchQuery.trim() ? searchResults : sessions;
 
@@ -222,45 +178,18 @@ export default function ConversationHistory({
             {displaySessions.map((session) => (
               <div
                 key={session.id}
-                className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-300 ease-in-out ${
+                className={`group relative p-3 rounded-lg cursor-pointer ${
                   currentSessionId === session.id
                     ? 'bg-blue-100 border border-blue-200'
                     : 'hover:bg-gray-100'
-                } ${
-                  newSessionId === session.id
-                    ? 'animate-pulse bg-green-50 border-green-200 shadow-lg'
-                    : ''
-                } ${
-                  updatingMessageCount === session.id
-                    ? 'bg-blue-50 border-blue-300 shadow-sm'
-                    : ''
-                } ${
-                  updatingTitle === session.id
-                    ? 'bg-green-50 border-green-300 shadow-sm'
-                    : ''
                 }`}
-                style={{
-                  animationDelay: newSessionId === session.id ? '0ms' : undefined,
-                  transform: newSessionId === session.id ? 'scale(1.02)' : 'scale(1)',
-                }}
                 onClick={() => onSessionSelect(session.id)}
               >
-                {/* Session Title */}
-                <div className="flex items-start justify-between">
-                  <h3 className={`text-base font-medium text-gray-900 truncate flex-1 transition-all duration-300 ease-in-out ${
-                    updatingTitle === session.id ? 'text-blue-600 font-semibold' : ''
-                  }`}>
-                    {session.title || 'Untitled Conversation'}
-                  </h3>
-                </div>
-
                 {/* Session Metadata */}
-                <div className="flex items-center text-sm text-gray-500 mt-1 space-x-3">
+                <div className="flex items-center text-sm text-gray-500 space-x-3">
                   <div className="flex items-center">
                     <ChatBubbleLeftRightIcon className="w-4 h-4 mr-1" />
-                    <span className={`transition-all duration-300 ease-in-out ${
-                      updatingMessageCount === session.id ? 'text-blue-600 font-semibold scale-110' : ''
-                    }`}>
+                    <span>
                       {currentSessionId === session.id ? currentMessageCount : session.messageCount} messages
                     </span>
                   </div>
@@ -274,15 +203,19 @@ export default function ConversationHistory({
                 {currentSessionId === session.id && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-lg"></div>
                 )}
-                
-                {/* Message count update indicator */}
-                {updatingMessageCount === session.id && (
-                  <div className="absolute right-2 top-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                )}
-                
-                {/* Title update indicator */}
-                {updatingTitle === session.id && (
-                  <div className="absolute right-2 top-6 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+
+                {/* Delete button - show on hover for all sessions */}
+                {onDeleteRequest && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteRequest(session.id);
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                    title="Delete conversation"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
                 )}
               </div>
             ))}
