@@ -6,11 +6,11 @@ import BatchProgress from './BatchProgress';
 import AlbumConfirmationCard from './AlbumConfirmationCard';
 
 // Utility function to parse and render formatted text
-const renderFormattedText = (text: string, isUser: boolean) => {
+const renderFormattedText = (text: string) => {
   if (!text) return null;
 
   // Helper function to process inline formatting
-  const processInlineFormatting = (line: string, isUser: boolean) => {
+  const processInlineFormatting = (line: string) => {
     // Bold text: **text** or __text__
     let processed = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     processed = processed.replace(/__(.*?)__/g, '<strong>$1</strong>');
@@ -40,7 +40,7 @@ const renderFormattedText = (text: string, isUser: boolean) => {
           className: `${listClassName} list-inside space-y-1 my-2`
         }, currentList.map((item, index) => {
           const cleanItem = isNumbered ? item.replace(/^\d+\.\s*/, '') : item.replace(/^[-*•]\s*/, '');
-          const formattedItem = processInlineFormatting(cleanItem, isUser);
+          const formattedItem = processInlineFormatting(cleanItem);
           return (
             <li key={index} className="text-sm" dangerouslySetInnerHTML={{ __html: formattedItem }} />
           );
@@ -90,7 +90,7 @@ const renderFormattedText = (text: string, isUser: boolean) => {
       }
       
       if (trimmedLine) {
-        const formattedLine = processInlineFormatting(trimmedLine, isUser);
+        const formattedLine = processInlineFormatting(trimmedLine);
         elements.push(
           <p key={`text-${index}`} className="text-sm mb-2 last:mb-0" 
              dangerouslySetInnerHTML={{ __html: formattedLine }} />
@@ -219,7 +219,7 @@ export default function ChatMessage({
         {/* Text Content */}
         {content && (
           <div className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'} [&_strong]:font-semibold [&_em]:italic [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-1 [&_*]:text-inherit [&_p]:text-inherit [&_li]:text-inherit [&_strong]:text-inherit [&_em]:text-inherit`}>
-            {renderFormattedText(content, isUser)}
+            {renderFormattedText(content)}
           </div>
         )}
         

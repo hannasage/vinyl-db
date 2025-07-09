@@ -537,7 +537,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
 
   // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = () => {
       if (showMenu) {
         setShowMenu(false);
       }
@@ -822,7 +822,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
               <h3 className="text-lg font-semibold text-gray-900">Delete Conversation</h3>
             </div>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete "{sessionDetails?.title || 'Untitled Conversation'}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{sessionDetails?.title || 'Untitled Conversation'}&quot;? This action cannot be undone.
             </p>
             <div className="flex space-x-3">
               <button
