@@ -128,9 +128,16 @@ export class EnhancedMemoryManager {
    */
   async createSession(title?: string): Promise<string> {
     try {
+      // Get the current user
+      const { data: userData, error: userError } = await this.supabase.auth.getUser();
+      if (userError || !userData?.user) {
+        throw new Error('User not authenticated');
+      }
+      const user_id = userData.user.id;
       const { data, error } = await this.supabase
         .from('conversation_sessions')
         .insert({
+          user_id,
           title: title || null,
           message_count: 0,
           is_active: true
@@ -368,6 +375,32 @@ export class EnhancedMemoryManager {
     } catch (error) {
       console.error('Error loading session into memory:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get a conversation session by ID
+   */
+  async getSessionById(sessionId: string): Promise<ConversationSession | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('conversation_sessions')
+        .select('id, title, created_at, updated_at, message_count, is_active')
+        .eq('id', sessionId)
+        .single();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        title: data.title,
+        createdAt: new Date(data.created_at),
+        updatedAt: new Date(data.updated_at),
+        messageCount: data.message_count,
+        isActive: data.is_active
+      };
+    } catch (error) {
+      console.error('Error fetching session by ID:', error);
+      return null;
     }
   }
 
