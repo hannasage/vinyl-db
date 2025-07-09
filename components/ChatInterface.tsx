@@ -5,7 +5,6 @@ import Image from 'next/image';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import ConversationHistory from './ConversationHistory';
-import SessionManager from './SessionManager';
 import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 import { enhancedMemoryManager } from '../utils/agent/memory';
@@ -20,7 +19,6 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<Map<string, any>>(new Map());
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -30,25 +28,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [sessionDetails, setSessionDetails] = useState<{ title: string; createdAt: Date } | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize session and load conversation history
   // useEffect(() => {
   //   initializeSession();
   // }, []);
-
-  const initializeSession = async () => {
-    try {
-      // Create a new session
-      const sessionId = await enhancedMemoryManager.createSession();
-      setCurrentSessionId(sessionId);
-      
-      // Clear short-term memory for fresh start
-      enhancedMemoryManager.clearShortTermMemory();
-    } catch (error) {
-      console.error('Error initializing session:', error);
-      setError('Failed to initialize conversation session');
-    }
-  };
 
   // Update messages ref when messages change
   useEffect(() => {
@@ -80,7 +65,6 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     const newBlobUrl = URL.createObjectURL(file);
     setSelectedImageUrl(newBlobUrl);
     setSelectedImage(file);
-    setError(null);
   };
 
   const handleImageError = (message: string) => {
@@ -112,8 +96,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       try {
         imageData = await fileToBase64(imageFile);
         mimeType = imageFile.type;
-      } catch (error) {
-        console.error('Image conversion error:', error);
+      } catch {
+        console.error('Image conversion error:');
         setError('Failed to process image. Please try again.');
         return;
       }
@@ -125,7 +109,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       try {
         sessionId = await enhancedMemoryManager.createSession();
         setCurrentSessionId(sessionId);
-      } catch (error) {
+      } catch {
         setError('Failed to create new conversation session');
         return;
       }
@@ -154,8 +138,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           userMessage.type,
           { imageUrl: userMessage.imageUrl }
         );
-      } catch (error) {
-        console.error('Error saving user message to database:', error);
+      } catch {
+        console.error('Error saving user message to database:');
       }
     }
     setIsLoading(true);
@@ -220,8 +204,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
                 confirmationMessage.type,
                 confirmationMessage.data
               );
-            } catch (error) {
-              console.error('Error saving agent message to database:', error);
+            } catch {
+              console.error('Error saving agent message to database:');
             }
           }
         }
@@ -248,13 +232,13 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
               agentMessage.type,
               agentMessage.data
             );
-          } catch (error) {
-            console.error('Error saving agent message to database:', error);
+          } catch {
+            console.error('Error saving agent message to database:');
           }
         }
       }
-    } catch (error) {
-      console.error('Error calling chat endpoint:', error);
+    } catch (_error) {
+      console.error('Error calling chat endpoint:', _error);
       
       // Show error message to user
       const errorMessage: ChatMessageType = {
@@ -277,8 +261,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             'text',
             { error: true }
           );
-        } catch (error) {
-          console.error('Error saving error message to database:', error);
+        } catch {
+          console.error('Error saving error message to database:');
         }
       }
     } finally {
@@ -354,8 +338,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             'text',
             { operationConfirmed: true }
           );
-        } catch (error) {
-          console.error('Error saving success message to database:', error);
+        } catch {
+          console.error('Error saving success message to database:');
         }
       }
 
@@ -372,8 +356,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           : msg
       ));
 
-    } catch (error) {
-      console.error('Error executing confirmed operation:', error);
+    } catch {
+      console.error('Error executing confirmed operation:');
       
       const errorMessage: ChatMessageType = {
         id: (Date.now() + 1).toString(),
@@ -395,8 +379,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             'text',
             { error: true }
           );
-        } catch (error) {
-          console.error('Error saving error message to database:', error);
+        } catch {
+          console.error('Error saving error message to database:');
         }
       }
     }
@@ -424,8 +408,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           'text',
           { operationCancelled: true }
         );
-      } catch (error) {
-        console.error('Error saving cancellation message to database:', error);
+      } catch {
+        console.error('Error saving cancellation message to database:');
       }
     }
 
@@ -455,8 +439,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       setPendingConfirmations(new Map());
       enhancedMemoryManager.clearShortTermMemory();
       setError(null);
-    } catch (error) {
-      console.error('Error creating new session:', error);
+    } catch {
+      console.error('Error creating new session:');
       setError('Failed to create new conversation session');
     }
   };
@@ -483,33 +467,15 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       setMessages(chatMessages);
       setPendingConfirmations(new Map());
       setError(null);
-    } catch (error) {
-      console.error('Error loading session:', error);
+    } catch {
+      console.error('Error loading session:');
       setError('Failed to load conversation session');
-    }
-  };
-
-  const handleSessionTitleChange = (sessionId: string, newTitle: string) => {
-    // Update the session title in the UI if it's the current session
-    if (sessionId === currentSessionId) {
-      // The SessionManager component will handle the database update
-      // We just need to refresh the conversation history if needed
-    }
-  };
-
-  const handleSessionArchive = async (sessionId: string) => {
-    // If the archived session is the current one, create a new session
-    if (sessionId === currentSessionId) {
-      await handleNewSession();
     }
   };
 
   const canSend = (inputValue.trim() || selectedImage) && !isLoading;
 
   // Responsive sidebar logic
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-
-  // Hide sidebar by default on mobile
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const handleResize = () => {
@@ -548,7 +514,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setIsEditingTitle(false);
     try {
       await enhancedMemoryManager.updateSessionTitle(currentSessionId, newTitle);
-    } catch (error) {
+    } catch {
       setError('Failed to update session title');
     }
   };
@@ -685,7 +651,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
 
         {/* Error Display */}
         {error && (
-          <div className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg mx-4 mb-2">
+          <div className="text-center text-red-500 mt-4">
             {error}
           </div>
         )}

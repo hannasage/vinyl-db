@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { enhancedMemoryManager, ConversationSession, ConversationMessage } from '../utils/agent/memory';
 
 // Icons as inline SVG components
@@ -51,13 +51,7 @@ export default function SessionManager({
   const [editTitle, setEditTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (sessionId) {
-      loadSessionData();
-    }
-  }, [sessionId]);
-
-  const loadSessionData = async () => {
+  const loadSessionData = useCallback(async () => {
     try {
       setIsLoading(true);
       const [sessionData, messagesData] = await Promise.all([
@@ -70,12 +64,18 @@ export default function SessionManager({
       setSession(sessionData);
       setMessages(messagesData);
       setEditTitle(sessionData?.title || '');
-    } catch (error) {
-      console.error('Error loading session data:', error);
+    } catch (_error) {
+      console.error('Error loading session data:', _error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (sessionId) {
+      loadSessionData();
+    }
+  }, [sessionId, loadSessionData]);
 
   const handleTitleSave = async () => {
     if (!session || !editTitle.trim()) return;
