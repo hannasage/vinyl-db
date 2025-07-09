@@ -83,7 +83,7 @@ export default function ChatMessage({
         )}
 
         {/* Album Confirmation Display */}
-        {type === 'album_confirmation' && data && onAlbumConfirm && onAlbumDeny && (
+        {type === 'album_confirmation' && data && data.isPending && onAlbumConfirm && onAlbumDeny && (
           <div className="mb-2">
             <AlbumConfirmationCard
               album={data.album}

@@ -203,7 +203,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
               album: confirmation.album,
               action: confirmation.action,
               operationId: confirmation.operationId,
-              isLoading: false
+              isLoading: false,
+              isPending: true
             }
           };
           
@@ -364,6 +365,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         newMap.delete(operationId);
         return newMap;
       });
+      // Mark the confirmation message as not pending
+      setMessages(prev => prev.map(msg =>
+        msg.type === 'album_confirmation' && msg.data?.operationId === operationId
+          ? { ...msg, data: { ...msg.data, isPending: false } }
+          : msg
+      ));
 
     } catch (error) {
       console.error('Error executing confirmed operation:', error);
@@ -428,6 +435,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       newMap.delete(operationId);
       return newMap;
     });
+    // Mark the confirmation message as not pending
+    setMessages(prev => prev.map(msg =>
+      msg.type === 'album_confirmation' && msg.data?.operationId === operationId
+        ? { ...msg, data: { ...msg.data, isPending: false } }
+        : msg
+    ));
   };
 
   // Session management handlers
