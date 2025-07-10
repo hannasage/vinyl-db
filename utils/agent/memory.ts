@@ -170,15 +170,14 @@ export class EnhancedMemoryManager {
 
     try {
       // Get the next sequence number
-      const { data: lastMessage } = await this.supabase
+      const { data: lastMessages } = await this.supabase
         .from('conversation_messages')
         .select('sequence_number')
         .eq('session_id', this.currentSessionId)
         .order('sequence_number', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      const sequenceNumber = (lastMessage?.sequence_number || 0) + 1;
+      const sequenceNumber = (lastMessages?.[0]?.sequence_number || 0) + 1;
 
       const { data, error } = await this.supabase
         .from('conversation_messages')
