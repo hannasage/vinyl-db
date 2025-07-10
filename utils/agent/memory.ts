@@ -483,7 +483,8 @@ export class EnhancedMemoryManager {
           .from('conversation_feedback')
           .insert({
             session_id: sessionId,
-            feedback_type: feedbackType
+            feedback_type: feedbackType,
+            user_id: (await this.supabase.auth.getUser()).data.user?.id
           })
           .select('id')
           .single();
@@ -519,9 +520,9 @@ export class EnhancedMemoryManager {
         .from('conversation_feedback')
         .select('*')
         .eq('session_id', sessionId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+      if (error) throw error;
 
       if (!data) return null;
 
@@ -560,7 +561,8 @@ export class EnhancedMemoryManager {
           description,
           tags,
           usage_count: 0,
-          is_active: true
+          is_active: true,
+          user_id: (await this.supabase.auth.getUser()).data.user?.id
         })
         .select('id')
         .single();
