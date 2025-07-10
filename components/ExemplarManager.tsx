@@ -6,7 +6,6 @@ import { Pencil, Trash2, Tag, Clock } from 'lucide-react';
 
 interface ExemplarManagerProps {
   className?: string;
-  onExemplarSelect?: (exemplar: ExemplarConversation) => void;
   onExemplarEdit?: (exemplar: ExemplarConversation) => void;
   onExemplarDelete?: (exemplarId: string) => void;
 }
@@ -19,7 +18,6 @@ interface EditExemplarData {
 
 export default function ExemplarManager({
   className = '',
-  onExemplarSelect,
   onExemplarEdit,
   onExemplarDelete
 }: ExemplarManagerProps) {

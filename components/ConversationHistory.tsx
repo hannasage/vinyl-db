@@ -59,23 +59,6 @@ export default function ConversationHistory({
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      const results = await enhancedMemoryManager.searchSimilarConversations(searchQuery, 10);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Error searching conversations:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const displaySessions = searchQuery.trim() ? searchResults : sessions;
 
   return (

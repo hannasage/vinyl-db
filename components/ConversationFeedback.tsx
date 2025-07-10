@@ -14,8 +14,7 @@ interface ConversationFeedbackProps {
 export default function ConversationFeedback({
   sessionId,
   onFeedbackSubmit,
-  currentFeedback,
-  className = ''
+  currentFeedback
 }: ConversationFeedbackProps) {
   const [feedback, setFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(currentFeedback || null);
   const [isLoading, setIsLoading] = useState(false);

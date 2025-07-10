@@ -2,16 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { createClient } from '../utils/supabase/client';
+import { enhancedMemoryManager } from '../utils/agent/memory';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import ConversationHistory from './ConversationHistory';
 import ConversationFeedback from './ConversationFeedback';
-import ExemplarManager from './ExemplarManager';
 import SystemAdmin from './SystemAdmin';
 import { ChatMessageType, ChatResponse } from '../data/types';
-import { createClient } from '../utils/supabase/client';
-import { enhancedMemoryManager } from '../utils/agent/memory';
-import { format } from 'date-fns';
 
 interface ChatInterfaceProps {
   className?: string;
@@ -28,12 +26,10 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [showSidebar, setShowSidebar] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessageType[]>([]);
-  const [sessionDetails, setSessionDetails] = useState<{ createdAt: Date } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [currentFeedback, setCurrentFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(null);
-  const [showExemplarManager, setShowExemplarManager] = useState(false);
   const [currentView, setCurrentView] = useState<'conversations' | 'system'>('conversations');
 
   // Initialize session and load conversation history
@@ -510,7 +506,6 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       enhancedMemoryManager.clearShortTermMemory();
       setError(null);
       setCurrentFeedback(null);
-      setShowExemplarManager(false);
       
       // Trigger sidebar refresh with animation
       setRefreshTrigger(prev => prev + 1);
@@ -597,11 +592,11 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     if (currentSessionId) {
       enhancedMemoryManager.getSessionById(currentSessionId).then(session => {
         if (session) {
-          setSessionDetails({ createdAt: session.createdAt });
+          // setSessionDetails({ createdAt: session.createdAt }); // Removed unused state
         }
       });
     } else {
-      setSessionDetails(null);
+      // setSessionDetails(null); // Removed unused state
     }
   }, [currentSessionId]);
 
