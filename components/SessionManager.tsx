@@ -2,37 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { enhancedMemoryManager, ConversationSession, ConversationMessage } from '../utils/agent/memory';
-
-// Icons as inline SVG components
-const PencilIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-  </svg>
-);
-
-const ArchiveBoxIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-  </svg>
-);
-
-const ArrowDownTrayIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-  </svg>
-);
-
-const ClockIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const ChatBubbleLeftRightIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);
+import { Pencil, Archive, Download, Clock, MessageCircle } from 'lucide-react';
 
 interface SessionManagerProps {
   sessionId: string;
@@ -222,7 +192,7 @@ export default function SessionManager({
                 className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
                 title="Edit title"
               >
-                <PencilIcon className="w-4 h-4" />
+                <Pencil className="w-4 h-4" />
               </button>
             </div>
           )}
@@ -232,11 +202,11 @@ export default function SessionManager({
       {/* Session Statistics */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <ChatBubbleLeftRightIcon className="w-4 h-4" />
+          <MessageCircle className="w-4 h-4" />
           <span>{session.messageCount} messages</span>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <ClockIcon className="w-4 h-4" />
+          <Clock className="w-4 h-4" />
           <span>{sessionDuration}</span>
         </div>
       </div>
@@ -254,7 +224,7 @@ export default function SessionManager({
           className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           title="Export conversation"
         >
-          <ArrowDownTrayIcon className="w-4 h-4" />
+          <Download className="w-4 h-4" />
           <span>Export</span>
         </button>
         <button
@@ -262,7 +232,7 @@ export default function SessionManager({
           className="flex items-center space-x-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           title="Archive conversation"
         >
-          <ArchiveBoxIcon className="w-4 h-4" />
+          <Archive className="w-4 h-4" />
           <span>Archive</span>
         </button>
       </div>

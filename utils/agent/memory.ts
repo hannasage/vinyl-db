@@ -455,25 +455,55 @@ export class EnhancedMemoryManager {
   // Feedback Functions
 
   /**
-   * Save feedback for a conversation session
+   * Save feedback for a conversation session and optionally create exemplar
    */
   async saveFeedback(
     sessionId: string,
-    feedbackType: 'thumbs_up' | 'thumbs_down'
+    feedbackType: 'thumbs_up' | 'thumbs_down',
+    createExemplar: boolean = true
   ): Promise<string> {
     try {
-      const { data, error } = await this.supabase
-        .from('conversation_feedback')
-        .insert({
-          session_id: sessionId,
-          feedback_type: feedbackType
-        })
-        .select('id')
-        .single();
+      // Check if feedback already exists for this session
+      const existingFeedback = await this.getSessionFeedback(sessionId);
+      
+      if (existingFeedback) {
+        // Update existing feedback
+        const { data, error } = await this.supabase
+          .from('conversation_feedback')
+          .update({ feedback_type: feedbackType })
+          .eq('session_id', sessionId)
+          .select('id')
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
+        return data.id;
+      } else {
+        // Create new feedback
+        const { data, error } = await this.supabase
+          .from('conversation_feedback')
+          .insert({
+            session_id: sessionId,
+            feedback_type: feedbackType
+          })
+          .select('id')
+          .single();
 
-      return data.id;
+        if (error) throw error;
+
+        // Create exemplar if requested and this is new feedback
+        if (createExemplar) {
+          try {
+            const exemplarType = feedbackType === 'thumbs_up' ? 'positive' : 'negative';
+            const title = `${exemplarType === 'positive' ? 'Helpful' : 'Unhelpful'} Conversation`;
+            await this.createExemplar(sessionId, exemplarType, title);
+          } catch (exemplarError) {
+            console.error('Error creating exemplar:', exemplarError);
+            // Don't throw here - feedback was saved successfully
+          }
+        }
+
+        return data.id;
+      }
     } catch (error) {
       console.error('Error saving feedback:', error);
       throw error;
@@ -609,6 +639,47 @@ export class EnhancedMemoryManager {
       if (error) throw error;
     } catch (error) {
       console.error('Error updating exemplar usage:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update exemplar metadata
+   */
+  async updateExemplar(
+    exemplarId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+    }
+  ): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from('exemplar_conversations')
+        .update(updates)
+        .eq('id', exemplarId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating exemplar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete exemplar (mark as inactive)
+   */
+  async deleteExemplar(exemplarId: string): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from('exemplar_conversations')
+        .update({ is_active: false })
+        .eq('id', exemplarId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting exemplar:', error);
       throw error;
     }
   }

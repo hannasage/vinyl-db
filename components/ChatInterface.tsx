@@ -5,6 +5,8 @@ import Image from 'next/image';
 import ChatMessage from './ChatMessage';
 import ImageUpload from './ImageUpload';
 import ConversationHistory from './ConversationHistory';
+import ConversationFeedback from './ConversationFeedback';
+import ExemplarManager from './ExemplarManager';
 import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 import { enhancedMemoryManager } from '../utils/agent/memory';
@@ -29,6 +31,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [currentFeedback, setCurrentFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(null);
+  const [showExemplarManager, setShowExemplarManager] = useState(false);
 
   // Initialize session and load conversation history
   // useEffect(() => {
@@ -287,6 +291,42 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setSelectedImage(null);
   };
 
+  const handleFeedbackSubmit = async (feedbackType: 'thumbs_up' | 'thumbs_down') => {
+    if (!currentSessionId) return;
+
+    try {
+      setCurrentFeedback(feedbackType);
+      
+      // Show success message
+      const feedbackMessage: ChatMessageType = {
+        id: (Date.now() + Math.random()).toString(),
+        content: `Thank you for your feedback! This conversation has been marked as ${feedbackType === 'thumbs_up' ? 'helpful' : 'not helpful'} and saved as an exemplar.`,
+        sender: 'agent',
+        timestamp: new Date(),
+        type: 'text'
+      };
+
+      setMessages(prev => [...prev, feedbackMessage]);
+      enhancedMemoryManager.addShortTermMessage(feedbackMessage);
+      
+      // Save feedback message to database
+      try {
+        await enhancedMemoryManager.saveMessage(
+          feedbackMessage.content,
+          'agent',
+          'text',
+          { feedbackSubmitted: true, feedbackType }
+        );
+      } catch {
+        console.error('Error saving feedback message to database:');
+      }
+
+    } catch (err) {
+      console.error('Error submitting feedback:', err);
+      setError('Failed to submit feedback. Please try again.');
+    }
+  };
+
   const handleAlbumConfirm = async (operationId: string, selectedArtworkUrl?: string) => {
     const confirmation = pendingConfirmations.get(operationId);
     if (!confirmation) {
@@ -441,6 +481,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       setPendingConfirmations(new Map());
       enhancedMemoryManager.clearShortTermMemory();
       setError(null);
+      setCurrentFeedback(null);
+      setShowExemplarManager(false);
       
       // Trigger sidebar refresh with animation
       setRefreshTrigger(prev => prev + 1);
@@ -472,6 +514,15 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       setMessages(chatMessages);
       setPendingConfirmations(new Map());
       setError(null);
+      
+      // Load current feedback for this session
+      try {
+        const feedback = await enhancedMemoryManager.getSessionFeedback(sessionId);
+        setCurrentFeedback(feedback?.feedbackType || null);
+      } catch {
+        console.error('Error loading session feedback:');
+        setCurrentFeedback(null);
+      }
     } catch {
       console.error('Error loading session:');
       setError('Failed to load conversation session');
@@ -599,24 +650,49 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         <div className={`border-b border-gray-200 bg-white sticky top-0 z-30 transition-all duration-300 ease-in-out ${
           refreshTrigger > 0 ? 'bg-blue-50' : 'bg-white'
         }`}>
-          <div className="flex flex-row items-center p-4">
-            {/* Sidebar open button for mobile */}
-            <button
-              onClick={() => setShowSidebar(true)}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
-              title="Show sidebar"
-              aria-label="Show sidebar"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            {sessionDetails && (
-              <span className="text-lg text-gray-700 ml-3 text-left m-0 p-0">
-                Created: {format(sessionDetails.createdAt, 'PPpp')}
-              </span>
+          <div className="flex flex-row items-center p-4 justify-between">
+            <div className="flex items-center">
+              {/* Sidebar open button for mobile */}
+              <button
+                onClick={() => setShowSidebar(true)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
+                title="Show sidebar"
+                aria-label="Show sidebar"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              {sessionDetails && (
+                <span className="text-lg text-gray-700 ml-3 text-left m-0 p-0">
+                  Created: {format(sessionDetails.createdAt, 'PPpp')}
+                </span>
+              )}
+            </div>
+            {/* Feedback and Exemplar UI in header */}
+            {currentSessionId && messages.length > 0 && (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">Was this conversation helpful?</span>
+                <ConversationFeedback
+                  sessionId={currentSessionId}
+                  onFeedbackSubmit={handleFeedbackSubmit}
+                  currentFeedback={currentFeedback}
+                />
+                <button
+                  onClick={() => setShowExemplarManager(!showExemplarManager)}
+                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors border border-blue-100 rounded px-2 py-1 ml-2"
+                >
+                  {showExemplarManager ? 'Hide' : 'View'} Exemplars
+                </button>
+              </div>
             )}
           </div>
+          {/* Exemplar Manager in header dropdown */}
+          {showExemplarManager && (
+            <div className="border-t border-gray-200 p-4 bg-white">
+              <ExemplarManager />
+            </div>
+          )}
         </div>
 
         {/* SessionManager for mobile (below header) */}
