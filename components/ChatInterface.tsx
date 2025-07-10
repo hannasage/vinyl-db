@@ -627,17 +627,21 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         ].join(' ')}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-          <select
-            value={currentView}
-            onChange={(e) => setCurrentView(e.target.value as 'conversations' | 'system')}
-            className="appearance-none bg-transparent text-lg font-semibold text-gray-900 focus:outline-none focus:ring-0 border-none p-0 m-0 cursor-pointer"
-            style={{ boxShadow: 'none' }}
-            aria-label="Select view"
-          >
-            <option value="conversations" className="text-base font-semibold">Conversations</option>
-            <option value="system" className="text-base font-semibold">System</option>
-          </select>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0 h-18">
+          <div className="flex items-center w-full h-10">
+            <label htmlFor="sidebar-view-select" className="sr-only">Select view</label>
+            <select
+              id="sidebar-view-select"
+              value={currentView}
+              onChange={(e) => setCurrentView(e.target.value as 'conversations' | 'system')}
+              className="appearance-none bg-transparent text-lg font-bold leading-tight text-gray-900 focus:outline-none focus:ring-0 border-none p-0 m-0 cursor-pointer h-14"
+              style={{ boxShadow: 'none' }}
+              aria-label="Select view"
+            >
+              <option value="conversations" className="text-base font-semibold">Conversations</option>
+              <option value="system" className="text-base font-semibold">System</option>
+            </select>
+          </div>
           <button
             onClick={() => setShowSidebar(false)}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
@@ -666,8 +670,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
         <div className={`border-b border-gray-200 bg-white sticky top-0 z-30 transition-all duration-300 ease-in-out ${
           refreshTrigger > 0 ? 'bg-blue-50' : 'bg-white'
         }`}>
-          <div className="flex flex-row items-center p-4 justify-between">
-            <div className="flex items-center">
+          <div className="flex flex-row items-center p-4 justify-between h-18">
+            <div className="flex items-center h-10">
               {/* Sidebar open button for mobile */}
               <button
                 onClick={() => setShowSidebar(true)}
@@ -679,11 +683,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {currentView === 'conversations' && sessionDetails && (
-                <span className="text-lg text-gray-700 ml-3 text-left m-0 p-0">
-                  Created: {format(sessionDetails.createdAt, 'PPpp')}
-                </span>
-              )}
+              {/* Remove Created text */}
             </div>
             {/* Feedback UI - only show in conversations view */}
             {currentView === 'conversations' && currentSessionId && messages.length > 0 && (

@@ -56,48 +56,23 @@ export default function ConversationFeedback({
   };
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => feedback === 'thumbs_up' ? handleToggleFeedback() : handleFeedback('thumbs_up')}
-          disabled={isLoading}
-          className={`
-            p-2 rounded-lg transition-all duration-200 flex items-center gap-1
-            ${feedback === 'thumbs_up' 
-              ? 'bg-green-100 text-green-700 border-2 border-green-300 hover:bg-green-200' 
-              : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200 hover:text-gray-800'
-            }
-            ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          `}
-          title={feedback === 'thumbs_up' ? 'Remove positive feedback' : 'Mark as helpful conversation'}
-        >
-          <ThumbsUp className="w-4 h-4" />
-          <span className="text-sm font-medium">Helpful</span>
-        </button>
-
-        <button
-          onClick={() => feedback === 'thumbs_down' ? handleToggleFeedback() : handleFeedback('thumbs_down')}
-          disabled={isLoading}
-          className={`
-            p-2 rounded-lg transition-all duration-200 flex items-center gap-1
-            ${feedback === 'thumbs_down' 
-              ? 'bg-red-100 text-red-700 border-2 border-red-300 hover:bg-red-200' 
-              : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200 hover:text-gray-800'
-            }
-            ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          `}
-          title={feedback === 'thumbs_down' ? 'Remove negative feedback' : 'Mark as unhelpful conversation'}
-        >
-          <ThumbsDown className="w-4 h-4" />
-          <span className="text-sm font-medium">Not Helpful</span>
-        </button>
-      </div>
-
-      {error && (
-        <div className="text-red-600 text-sm">
-          {error}
-        </div>
-      )}
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => handleFeedback('thumbs_up')}
+        className={`p-2 rounded-full border transition-colors ${currentFeedback === 'thumbs_up' ? 'bg-green-100 border-green-400 text-green-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-100 hover:text-green-500'}`}
+        aria-label="Mark conversation as helpful"
+        disabled={!!currentFeedback}
+      >
+        <ThumbsUp className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => handleFeedback('thumbs_down')}
+        className={`p-2 rounded-full border transition-colors ${currentFeedback === 'thumbs_down' ? 'bg-red-100 border-red-400 text-red-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-100 hover:text-red-500'}`}
+        aria-label="Mark conversation as not helpful"
+        disabled={!!currentFeedback}
+      >
+        <ThumbsDown className="w-5 h-5" />
+      </button>
     </div>
   );
 } 
