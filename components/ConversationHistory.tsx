@@ -82,28 +82,26 @@ export default function ConversationHistory({
     <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Conversations</h2>
+        <div className="flex items-center justify-between gap-2">
+          {/* Search input left, plus button right */}
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              placeholder="Coming soon!"
+              value={searchQuery}
+              disabled
+              readOnly
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed focus:ring-0 focus:border-gray-200 placeholder-gray-400"
+            />
+            <Search className="w-5 h-5 text-gray-300 absolute left-3 top-2.5" />
+          </div>
           <button
             onClick={onNewSession}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors ml-2"
             title="New conversation"
           >
             <Plus className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
         </div>
       </div>
 

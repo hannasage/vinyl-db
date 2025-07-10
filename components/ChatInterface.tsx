@@ -7,6 +7,7 @@ import ImageUpload from './ImageUpload';
 import ConversationHistory from './ConversationHistory';
 import ConversationFeedback from './ConversationFeedback';
 import ExemplarManager from './ExemplarManager';
+import SystemAdmin from './SystemAdmin';
 import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 import { enhancedMemoryManager } from '../utils/agent/memory';
@@ -33,6 +34,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [currentFeedback, setCurrentFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(null);
   const [showExemplarManager, setShowExemplarManager] = useState(false);
+  const [currentView, setCurrentView] = useState<'conversations' | 'system'>('conversations');
 
   // Initialize session and load conversation history
   // useEffect(() => {
@@ -623,10 +625,21 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           'z-50 sm:z-0'
         ].join(' ')}
       >
-        <div className="sm:hidden flex justify-end p-2">
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <select
+            value={currentView}
+            onChange={(e) => setCurrentView(e.target.value as 'conversations' | 'system')}
+            className="appearance-none bg-transparent text-lg font-semibold text-gray-900 focus:outline-none focus:ring-0 border-none p-0 m-0 cursor-pointer"
+            style={{ boxShadow: 'none' }}
+            aria-label="Select view"
+          >
+            <option value="conversations" className="text-base font-semibold">Conversations</option>
+            <option value="system" className="text-base font-semibold">System</option>
+          </select>
           <button
             onClick={() => setShowSidebar(false)}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg sm:hidden"
             aria-label="Close sidebar"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -634,19 +647,21 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
             </svg>
           </button>
         </div>
-        <ConversationHistory
-          onSessionSelect={handleSessionSelect}
-          onNewSession={handleNewSession}
-          onDeleteRequest={handleDeleteRequest}
-          currentSessionId={currentSessionId}
-          refreshTrigger={refreshTrigger}
-          currentMessageCount={messages.length}
-        />
+        {currentView === 'conversations' && (
+          <ConversationHistory
+            onSessionSelect={handleSessionSelect}
+            onNewSession={handleNewSession}
+            onDeleteRequest={handleDeleteRequest}
+            currentSessionId={currentSessionId}
+            refreshTrigger={refreshTrigger}
+            currentMessageCount={messages.length}
+          />
+        )}
       </div>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
-        {/* Header with editable title and timestamp */}
+        {/* Header with view selector and feedback */}
         <div className={`border-b border-gray-200 bg-white sticky top-0 z-30 transition-all duration-300 ease-in-out ${
           refreshTrigger > 0 ? 'bg-blue-50' : 'bg-white'
         }`}>
@@ -663,14 +678,14 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {sessionDetails && (
+              {currentView === 'conversations' && sessionDetails && (
                 <span className="text-lg text-gray-700 ml-3 text-left m-0 p-0">
                   Created: {format(sessionDetails.createdAt, 'PPpp')}
                 </span>
               )}
             </div>
-            {/* Feedback and Exemplar UI in header */}
-            {currentSessionId && messages.length > 0 && (
+            {/* Feedback UI - only show in conversations view */}
+            {currentView === 'conversations' && currentSessionId && messages.length > 0 && (
               <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-600">Was this conversation helpful?</span>
                 <ConversationFeedback
@@ -678,122 +693,117 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
                   onFeedbackSubmit={handleFeedbackSubmit}
                   currentFeedback={currentFeedback}
                 />
-                <button
-                  onClick={() => setShowExemplarManager(!showExemplarManager)}
-                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors border border-blue-100 rounded px-2 py-1 ml-2"
-                >
-                  {showExemplarManager ? 'Hide' : 'View'} Exemplars
-                </button>
               </div>
             )}
           </div>
-          {/* Exemplar Manager in header dropdown */}
-          {showExemplarManager && (
-            <div className="border-t border-gray-200 p-4 bg-white">
-              <ExemplarManager />
-            </div>
-          )}
         </div>
 
-        {/* SessionManager for mobile (below header) */}
-        {/* Removed SessionManager info UI on mobile */}
-
-        {/* Message List Area */}
-        <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="text-center text-gray-500 mt-8">
-              <p>Start a conversation by typing a message or uploading an image below</p>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                id={message.id}
-                content={message.content}
-                sender={message.sender}
-                timestamp={message.timestamp}
-                type={message.type}
-                imageUrl={message.imageUrl}
-                data={message.data}
-                onAlbumConfirm={handleAlbumConfirm}
-                onAlbumDeny={handleAlbumDeny}
-              />
-            ))
-          )}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
-                  <span className="text-sm">Processing...</span>
+        {/* Main Content Area */}
+        {currentView === 'conversations' ? (
+          <>
+            {/* Message List Area */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-500 mt-8">
+                  <p>Start a conversation by typing a message or uploading an image below</p>
                 </div>
-              </div>
+              ) : (
+                messages.map((message) => (
+                  <ChatMessage
+                    key={message.id}
+                    id={message.id}
+                    content={message.content}
+                    sender={message.sender}
+                    timestamp={message.timestamp}
+                    type={message.type}
+                    imageUrl={message.imageUrl}
+                    data={message.data}
+                    onAlbumConfirm={handleAlbumConfirm}
+                    onAlbumDeny={handleAlbumDeny}
+                  />
+                ))
+              )}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                      <span className="text-sm">Processing...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Scroll anchor for auto-scrolling */}
+              <div ref={messagesEndRef} />
             </div>
-          )}
-          {/* Scroll anchor for auto-scrolling */}
-          <div ref={messagesEndRef} />
-        </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="text-center text-red-500 mt-4">
-            {error}
-          </div>
-        )}
+            {/* Error Display */}
+            {error && (
+              <div className="text-center text-red-500 mt-4">
+                {error}
+              </div>
+            )}
 
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-2 sm:p-4 bg-white">
-          <div className="flex items-center space-x-2">
-            {/* Image Upload Icon Button */}
-            <ImageUpload
-              onImageSelect={handleImageSelect}
-              onError={handleImageError}
-              className=""
-            />
-            {/* If image selected, show thumbnail */}
-            {selectedImageUrl && (
-              <div className="relative mr-2">
-                <Image
-                  src={selectedImageUrl}
-                  alt="Selected"
-                  width={40}
-                  height={40}
-                  className="w-10 h-10 object-cover rounded-lg border border-gray-300"
+            {/* Input Area */}
+            <div className="border-t border-gray-200 p-2 sm:p-4 bg-white">
+              <div className="flex items-center space-x-2">
+                {/* Image Upload Icon Button */}
+                <ImageUpload
+                  onImageSelect={handleImageSelect}
+                  onError={handleImageError}
+                  className=""
+                />
+                {/* If image selected, show thumbnail */}
+                {selectedImageUrl && (
+                  <div className="relative mr-2">
+                    <Image
+                      src={selectedImageUrl}
+                      alt="Selected"
+                      width={40}
+                      height={40}
+                      className="w-10 h-10 object-cover rounded-lg border border-gray-300"
+                    />
+                    <button
+                      onClick={handleRemoveImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600 transition-colors text-xs"
+                      type="button"
+                      disabled={isLoading}
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {/* Text Input and Send Button */}
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
                 />
                 <button
-                  onClick={handleRemoveImage}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600 transition-colors text-xs"
-                  type="button"
-                  disabled={isLoading}
-                  aria-label="Remove image"
+                  onClick={handleSendMessage}
+                  disabled={!canSend || isLoading}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  ×
+                  Send
                 </button>
               </div>
-            )}
-            {/* Text Input and Send Button */}
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!canSend || isLoading}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Send
-            </button>
+            </div>
+          </>
+        ) : (
+          /* System Administration View */
+          <div className="flex-1 overflow-y-auto bg-gray-50">
+            <SystemAdmin />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
