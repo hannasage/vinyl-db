@@ -79,7 +79,7 @@ export default function ConversationHistory({
   const displaySessions = searchQuery.trim() ? searchResults : sessions;
 
   return (
-    <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
+    <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-full max-h-screen min-h-0">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between gap-2">
@@ -106,7 +106,7 @@ export default function ConversationHistory({
       </div>
 
       {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <div className="p-4 text-center text-gray-500">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>

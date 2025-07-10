@@ -622,11 +622,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
           'transition-all duration-300 ease-in-out',
           showSidebar ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0',
           'sm:translate-x-0 sm:opacity-100',
-          'z-50 sm:z-0'
+          'z-50 sm:z-0',
+          'flex flex-col min-h-0'
         ].join(' ')}
       >
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
           <select
             value={currentView}
             onChange={(e) => setCurrentView(e.target.value as 'conversations' | 'system')}
