@@ -293,34 +293,60 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     setSelectedImage(null);
   };
 
-  const handleFeedbackSubmit = async (feedbackType: 'thumbs_up' | 'thumbs_down') => {
+  const handleFeedbackSubmit = async (feedbackType: 'thumbs_up' | 'thumbs_down' | null) => {
     if (!currentSessionId) return;
 
     try {
       setCurrentFeedback(feedbackType);
       
-      // Show success message
-      const feedbackMessage: ChatMessageType = {
-        id: (Date.now() + Math.random()).toString(),
-        content: `Thank you for your feedback! This conversation has been marked as ${feedbackType === 'thumbs_up' ? 'helpful' : 'not helpful'} and saved as an exemplar.`,
-        sender: 'agent',
-        timestamp: new Date(),
-        type: 'text'
-      };
+      if (feedbackType === null) {
+        // Feedback was removed
+        const feedbackMessage: ChatMessageType = {
+          id: (Date.now() + Math.random()).toString(),
+          content: 'Feedback removed. This conversation is no longer marked as an exemplar.',
+          sender: 'agent',
+          timestamp: new Date(),
+          type: 'text'
+        };
 
-      setMessages(prev => [...prev, feedbackMessage]);
-      enhancedMemoryManager.addShortTermMessage(feedbackMessage);
-      
-      // Save feedback message to database
-      try {
-        await enhancedMemoryManager.saveMessage(
-          feedbackMessage.content,
-          'agent',
-          'text',
-          { feedbackSubmitted: true, feedbackType }
-        );
-      } catch {
-        console.error('Error saving feedback message to database:');
+        setMessages(prev => [...prev, feedbackMessage]);
+        enhancedMemoryManager.addShortTermMessage(feedbackMessage);
+        
+        // Save feedback removal message to database
+        try {
+          await enhancedMemoryManager.saveMessage(
+            feedbackMessage.content,
+            'agent',
+            'text',
+            { feedbackRemoved: true }
+          );
+        } catch {
+          console.error('Error saving feedback removal message to database:');
+        }
+      } else {
+        // Feedback was added/updated
+        const feedbackMessage: ChatMessageType = {
+          id: (Date.now() + Math.random()).toString(),
+          content: `Thank you for your feedback! This conversation has been marked as ${feedbackType === 'thumbs_up' ? 'helpful' : 'not helpful'} and saved as an exemplar.`,
+          sender: 'agent',
+          timestamp: new Date(),
+          type: 'text'
+        };
+
+        setMessages(prev => [...prev, feedbackMessage]);
+        enhancedMemoryManager.addShortTermMessage(feedbackMessage);
+        
+        // Save feedback message to database
+        try {
+          await enhancedMemoryManager.saveMessage(
+            feedbackMessage.content,
+            'agent',
+            'text',
+            { feedbackSubmitted: true, feedbackType }
+          );
+        } catch {
+          console.error('Error saving feedback message to database:');
+        }
       }
 
     } catch (err) {

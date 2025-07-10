@@ -539,6 +539,23 @@ export class EnhancedMemoryManager {
     }
   }
 
+  /**
+   * Remove feedback for a session
+   */
+  async removeFeedback(sessionId: string): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from('conversation_feedback')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error removing feedback:', error);
+      throw error;
+    }
+  }
+
   // Exemplar Functions
 
   /**
