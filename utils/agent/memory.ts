@@ -43,6 +43,7 @@ export class ConversationMemoryManager {
 
     // Check if we should create a summary
     if (this.messages.length >= this.summaryThreshold && this.messages.length % 10 === 0) {
+      console.log(`[MEMORY] Creating summary at ${this.messages.length} messages`);
       this.createSummary();
     }
   }
@@ -153,6 +154,7 @@ export class ConversationMemoryManager {
 
     // If we have summaries and the conversation is long, use summaries + recent messages
     if (this.summaries.length > 0 && this.messages.length > 15) {
+      console.log(`[MEMORY] Using ${this.summaries.length} summaries + ${limit} recent messages`);
       const recentMessages = this.messages.slice(-limit);
       const summaryContext = this.summaries
         .slice(-2) // Use last 2 summaries
@@ -179,6 +181,8 @@ export class ConversationMemoryManager {
 
       // Take top relevant messages, but ensure we have at least 5
       const topMessages = scoredMessages.slice(0, Math.max(5, limit));
+      const avgRelevance = scoredMessages.slice(0, 5).reduce((sum, item) => sum + item.relevance, 0) / 5;
+      console.log(`[MEMORY] Relevance-based selection: ${topMessages.length} messages, avg relevance: ${avgRelevance.toFixed(2)}`);
       
       const contextLines = topMessages.map(({ message }) => {
         const role = message.sender === 'user' ? 'User' : 'Assistant';

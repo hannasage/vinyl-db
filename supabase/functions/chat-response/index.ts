@@ -370,11 +370,15 @@ async function planOperations(message: string, conversationContext?: string, pre
     // Context optimization: summarize long contexts and check relevance
     if (validatedContext.length > 1000) {
       const relevance = calculateContextRelevance(validatedContext, validatedMessage);
+      console.log(`[OPTIMIZATION] Context relevance: ${relevance.toFixed(2)}, length: ${validatedContext.length}`);
+      
       if (relevance < 0.3) {
         // Low relevance context - summarize or truncate
+        console.log(`[OPTIMIZATION] Low relevance context (${relevance.toFixed(2)}), summarizing...`);
         validatedContext = await summarizeConversation(validatedContext, openai);
       } else if (validatedContext.length > 1500) {
         // High relevance but too long - summarize
+        console.log(`[OPTIMIZATION] Long context (${validatedContext.length} chars), summarizing...`);
         validatedContext = await summarizeConversation(validatedContext, openai);
       }
     }
@@ -382,6 +386,7 @@ async function planOperations(message: string, conversationContext?: string, pre
     // Select appropriate prompt template based on query type
     const promptType = selectPromptTemplate(validatedMessage, validatedContext);
     let template = PROMPT_TEMPLATES[promptType] || PROMPT_TEMPLATES.core;
+    console.log(`[OPTIMIZATION] Selected prompt template: ${promptType}`);
 
     // Build dynamic sections
     const toolDescriptions = Object.values(TOOLS).map(tool => 
@@ -400,9 +405,13 @@ ${previousResults.map((result, index) =>
     const reflectionAnalysis = previousResults && previousResults.length > 0 ? `
 ## Reflection
 Analyze previous results and decide next steps:
+- If the last operation was a vinyl_collection_query that returned found: true, the search was successful and the request is satisfied. Return {"operations": []}.
+- If the last operation was a vinyl_collection_query that returned found: false, consider alternative search strategies.
 - "if I don't have X, add it": If found: false → plan add; if found: true → return empty
-- "do I have X": Return empty (query answered)
+- "do I have X": If found: true → return empty (query answered); if found: false → return empty (confirmed not found)
 - Direct "add X": Return empty (handled in first iteration)
+
+IMPORTANT: If the last result shows found: true with albums, the search is complete. Return {"operations": []}.
 
 Return {"operations": []} if satisfied, or plan next operation.` : '';
 
@@ -439,6 +448,8 @@ Return {"operations": []} if satisfied, or plan next operation.` : '';
       max_tokens: 600 // Reduced from 800 due to shorter prompts
     });
 
+    console.log(`[OPTIMIZATION] Planning prompt tokens: ~${Math.ceil(template.length / 4)}`);
+
     const content = completion.choices[0]?.message?.content;
     
     if (!content) {
@@ -452,6 +463,17 @@ Return {"operations": []} if satisfied, or plan next operation.` : '';
       
       if (parsed.operations && Array.isArray(parsed.operations)) {
         console.log(`[chat-response] Planned ${parsed.operations.length} operations:`, parsed.operations.map(op => op.description));
+        
+        // Log if this is a repeat of a previous operation
+        if (previousResults && previousResults.length > 0) {
+          const lastResult = previousResults[previousResults.length - 1];
+          if (parsed.operations.length === 1 && 
+              parsed.operations[0].tool === lastResult.operation.tool &&
+              JSON.stringify(parsed.operations[0].parameters) === JSON.stringify(lastResult.operation.parameters)) {
+            console.log(`[AGENT] Detected duplicate operation planning`);
+          }
+        }
+        
         return parsed.operations;
       }
 
@@ -1158,8 +1180,25 @@ async function executeOperationsWithReflection(
     const operations = await planOperations(userMessage, conversationContext, results);
     
     if (operations.length === 0) {
+      // If the last result was successful, log and break to prevent repeats
+      if (results.length > 0 && results[results.length - 1].success) {
+        console.log('[OPTIMIZATION] Request satisfied, stopping further planning iterations.');
+        break;
+      }
       console.log(`[chat-response] No more operations planned after iteration ${iteration + 1} - user request satisfied`);
       break;
+    }
+    
+    // Check if we're about to repeat the exact same operation
+    if (results.length > 0 && operations.length === 1) {
+      const lastResult = results[results.length - 1];
+      const nextOperation = operations[0];
+      
+      if (lastResult.operation.tool === nextOperation.tool &&
+          JSON.stringify(lastResult.operation.parameters) === JSON.stringify(nextOperation.parameters)) {
+        console.log(`[AGENT] Preventing duplicate operation execution`);
+        break;
+      }
     }
     
     console.log(`[chat-response] Planned ${operations.length} operation(s) for iteration ${iteration + 1}:`, 
@@ -1181,6 +1220,8 @@ async function executeOperationsWithReflection(
     
     // Execute operations that don't require confirmation
     if (operationsToExecute.length > 0) {
+      let shouldBreakOuterLoop = false;
+      
       for (let i = 0; i < operationsToExecute.length; i++) {
         const operation = operationsToExecute[i];
         
@@ -1196,6 +1237,16 @@ async function executeOperationsWithReflection(
         
         results.push(executionResult);
         
+        // Check if this was a successful search operation that found results
+        if (result.success && operation.tool === 'vinyl_collection_query' && result.result.found === true) {
+          console.log(`[AGENT] Search successful: found ${result.result.totalResults || 0} albums for "${result.result.query}"`);
+          
+          // If this was a successful search that found results, break out of the outer loop
+          // to prevent infinite repetition of the same search
+          shouldBreakOuterLoop = true;
+          break;
+        }
+        
         // Handle alternative searches
         if (result.shouldRetryWithAlternative && result.alternativeSearch) {
           console.log(`[chat-response] Trying alternative search: ${result.alternativeSearch.description}`);
@@ -1207,6 +1258,12 @@ async function executeOperationsWithReflection(
             error: alternativeResult.error
           });
         }
+      }
+      
+      // Break out of the outer loop if a successful search was found
+      if (shouldBreakOuterLoop) {
+        console.log(`[AGENT] Request satisfied, stopping further planning`);
+        break;
       }
     }
     
@@ -1296,11 +1353,15 @@ async function formatResponseWithGPT(
     // Context optimization for response formatting
     if (validatedContext.length > 800) {
       const relevance = calculateContextRelevance(validatedContext, validatedQuestion);
+      console.log(`[OPTIMIZATION] Response context relevance: ${relevance.toFixed(2)}, length: ${validatedContext.length}`);
+      
       if (relevance < 0.2) {
         // Very low relevance - truncate
+        console.log(`[OPTIMIZATION] Very low relevance context (${relevance.toFixed(2)}), truncating...`);
         validatedContext = validatedContext.substring(0, 800);
       } else if (validatedContext.length > 1200) {
         // High relevance but too long - summarize
+        console.log(`[OPTIMIZATION] Long response context (${validatedContext.length} chars), summarizing...`);
         validatedContext = await summarizeConversation(validatedContext, openai);
       }
     }
@@ -1346,6 +1407,8 @@ ${validatedContext}` : '';
       temperature: 0.2,
       max_tokens: 300 // Reduced from 400 due to shorter prompt
     });
+
+    console.log(`[OPTIMIZATION] Response prompt tokens: ~${Math.ceil(template.length / 4)}`);
 
     const content = completion.choices[0]?.message?.content;
     
