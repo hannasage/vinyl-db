@@ -386,7 +386,7 @@ const TOOLS = {
       properties: {
         query: { type: 'string', description: 'Natural language search query (required)' },
         searchType: { type: 'string', description: 'Type of search: album, artist, temporal, combined (default: combined)' },
-        limit: { type: 'number', description: 'Maximum number of results (default: 10)' },
+        limit: { type: 'number', description: 'Maximum number of results (default: 1000)' },
         similarityThreshold: { type: 'number', description: 'Minimum similarity score (default: 0.7)' }
       },
       required: ['query']
@@ -585,7 +585,7 @@ Return {"operations": []} if satisfied, or plan next operation.` : '';
 
 // Direct tool execution functions
 async function executeVinylCollectionQuery(params: any, supabase: any, authHeader: string): Promise<any> {
-  const { query, searchType = 'combined', limit = 10, similarityThreshold = 0.7 } = params;
+  const { query, searchType = 'combined', limit = 1000, similarityThreshold = 0.7 } = params;
   
   console.log('[chat-response] Executing vinyl_collection_query with params:', params);
   

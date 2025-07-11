@@ -26,7 +26,7 @@ interface SearchResult {
 async function performCollectionQuery(
   query: string, 
   searchType: string = 'combined',
-  limit: number = 10, 
+  limit: number = 1000, 
   threshold: number = 0.7,
   supabase: any
 ): Promise<SearchResult[]> {
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { query, searchType = 'combined', limit = 10, similarityThreshold = 0.7 } = await req.json();
+    const { query, searchType = 'combined', limit = 1000, similarityThreshold = 0.7 } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
