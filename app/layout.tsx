@@ -2,6 +2,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Anybody } from "next/font/google";
 import DotMatrixBackground from '@/components/DotMatrixBackground';
+import FloatingChatProvider from '@/components/FloatingChatProvider';
 import "./globals.css";
 
 const inter = Anybody({ subsets: ["latin"] });
@@ -28,6 +29,7 @@ export default async function RootLayout({
         </main>
         {/* TODO: Fix responsive scaling bug w/ dot matrix */}
         <DotMatrixBackground />
+        <FloatingChatProvider />
       </body>
     </html>
   );

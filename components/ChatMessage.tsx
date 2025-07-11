@@ -39,9 +39,9 @@ export default function ChatMessage({
         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
           isUser
             ? 'bg-blue-500 text-white'
-            : 'bg-gray-200 text-gray-800'
+            : 'bg-gray-200 text-gray-800 agent-bubble'
         }`}
-      >
+      > 
         {/* Image Display */}
         {type === 'image' && imageUrl && (
           <div className="mb-2">
@@ -111,9 +111,11 @@ export default function ChatMessage({
         
         {/* Text Content */}
         {content && (
-          <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`}>
-            {content}
-          </p>
+          isUser ? (
+            <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`}>{content}</p>
+          ) : (
+            <p className={`text-sm ${isUser ? 'text-white' : 'text-gray-800'}`} dangerouslySetInnerHTML={{ __html: content }} />
+          )
         )}
         
         {/* Timestamp */}

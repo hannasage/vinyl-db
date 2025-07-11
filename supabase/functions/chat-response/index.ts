@@ -87,6 +87,42 @@ const TOOLS = {
         artistName: { type: 'string', description: 'Artist name (optional)' }
       }
     }
+  },
+  vinyl_collection_overview: {
+    name: 'vinyl_collection_overview',
+    description: 'Get a comprehensive overview of the entire vinyl collection including statistics and all albums',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        includeStats: { type: 'boolean', description: 'Include collection statistics (default: true)' },
+        limit: { type: 'number', description: 'Maximum number of albums to return (default: 100)' },
+        sortBy: { type: 'string', description: 'Sort by: acquired_date, title, artist, release_year (default: acquired_date)' }
+      }
+    }
+  },
+  vinyl_artist_catalog: {
+    name: 'vinyl_artist_catalog',
+    description: 'Get all albums by a specific artist with complete details',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        artistName: { type: 'string', description: 'Artist name to search for (required)' },
+        includeStats: { type: 'boolean', description: 'Include artist-specific statistics (default: true)' }
+      },
+      required: ['artistName']
+    }
+  },
+  vinyl_fuzzy_search: {
+    name: 'vinyl_fuzzy_search',
+    description: 'Search for albums with partial name matches (fuzzy search)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        searchTerm: { type: 'string', description: 'Search term to find in album titles (required)' },
+        limit: { type: 'number', description: 'Maximum number of results (default: 20)' }
+      },
+      required: ['searchTerm']
+    }
   }
 };
 
@@ -157,7 +193,28 @@ User: "Do I have Prince?"
 
 **Empty Results:**
 User: "Do I have any albums?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {}, "description": "Query all albums in collection", "requiresConfirmation": false}]}`;
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {}, "description": "Query all albums in collection", "requiresConfirmation": false}]}
+
+**Collection Overview:**
+User: "Show me my entire collection"
+{"operations": [{"tool": "vinyl_collection_overview", "parameters": {"includeStats": true, "limit": 100, "sortBy": "acquired_date"}, "description": "Get comprehensive overview of entire vinyl collection", "requiresConfirmation": false}]}
+
+User: "Give me an overview of what I have"
+{"operations": [{"tool": "vinyl_collection_overview", "parameters": {"includeStats": true, "limit": 50, "sortBy": "title"}, "description": "Get overview of vinyl collection sorted by title", "requiresConfirmation": false}]}
+
+**Artist Catalog:**
+User: "Show me all my Beatles albums"
+{"operations": [{"tool": "vinyl_artist_catalog", "parameters": {"artistName": "The Beatles", "includeStats": true}, "description": "Get all albums by The Beatles with complete details", "requiresConfirmation": false}]}
+
+User: "What do I have by Prince?"
+{"operations": [{"tool": "vinyl_artist_catalog", "parameters": {"artistName": "Prince", "includeStats": true}, "description": "Get all albums by Prince with complete details", "requiresConfirmation": false}]}
+
+**Fuzzy Search:**
+User: "Find albums with 'brat' in the title"
+{"operations": [{"tool": "vinyl_fuzzy_search", "parameters": {"searchTerm": "brat", "limit": 20}, "description": "Search for albums with 'brat' in the title", "requiresConfirmation": false}]}
+
+User: "Search for 'dark' albums"
+{"operations": [{"tool": "vinyl_fuzzy_search", "parameters": {"searchTerm": "dark", "limit": 20}, "description": "Search for albums with 'dark' in the title", "requiresConfirmation": false}]}`;
 
     const systemPrompt = `## Role
 You are an intelligent planning assistant for vinyl collection management. You excel at reasoning, understanding context, and creating sophisticated operation plans.
@@ -576,6 +633,289 @@ async function executeVinylRemoveAlbum(params: any, supabase: any): Promise<any>
   };
 }
 
+async function executeVinylCollectionOverview(params: any, supabase: any): Promise<any> {
+  console.log('[chat-response] Executing vinyl_collection_overview with params:', params);
+  
+  const { includeStats = true, limit = 100, sortBy = 'acquired_date' } = params;
+  
+  // Build the query
+  let query = supabase.from('album').select(`
+    id,
+    title,
+    artist_id,
+    variant,
+    purchase_date,
+    acquired_date,
+    preordered,
+    artwork_url,
+    release_year,
+    size
+  `);
+  
+  // Apply sorting
+  switch (sortBy) {
+    case 'title':
+      query = query.order('title', { ascending: true });
+      break;
+    case 'artist':
+      query = query.order('artist_id', { ascending: true });
+      break;
+    case 'release_year':
+      query = query.order('release_year', { ascending: true });
+      break;
+    case 'acquired_date':
+    default:
+      query = query.order('acquired_date', { ascending: false });
+      break;
+  }
+  
+  // Apply limit
+  query = query.limit(limit);
+  
+  const { data: albums, error: albumError } = await query;
+  
+  if (albumError) {
+    throw albumError;
+  }
+  
+  // Get artist names for all albums
+  const results = await Promise.all(albums.map(async (album) => {
+    const { data: artist, error: artistError } = await supabase
+      .from('artist')
+      .select('name')
+      .eq('id', album.artist_id)
+      .single();
+
+    if (artistError) {
+      console.error('Error fetching artist name:', artistError);
+      return {
+        ...album,
+        artist_name: 'Unknown Artist'
+      };
+    }
+
+    return {
+      ...album,
+      artist_name: artist.name
+    };
+  }));
+  
+  let stats = null;
+  
+  if (includeStats) {
+    // Get collection statistics
+    const { count: totalAlbums, error: countError } = await supabase
+      .from('album')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.error('Error getting total album count:', countError);
+    } else {
+      // Get artist count
+      const { count: totalArtists, error: artistCountError } = await supabase
+        .from('artist')
+        .select('*', { count: 'exact', head: true });
+      
+      if (artistCountError) {
+        console.error('Error getting total artist count:', artistCountError);
+      } else {
+        // Get recent acquisitions (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const { count: recentAlbums, error: recentError } = await supabase
+          .from('album')
+          .select('*', { count: 'exact', head: true })
+          .gte('acquired_date', thirtyDaysAgo.toISOString().split('T')[0]);
+        
+        if (recentError) {
+          console.error('Error getting recent albums count:', recentError);
+        } else {
+          stats = {
+            totalAlbums,
+            totalArtists,
+            recentAlbums: recentAlbums || 0,
+            oldestAlbum: results.length > 0 ? Math.min(...results.filter(a => a.release_year).map(a => a.release_year)) : null,
+            newestAlbum: results.length > 0 ? Math.max(...results.filter(a => a.release_year).map(a => a.release_year)) : null
+          };
+        }
+      }
+    }
+  }
+  
+  return {
+    success: true,
+    message: `Found ${results.length} albums in your collection${limit < results.length ? ` (showing first ${limit})` : ''}`,
+    albums: results,
+    stats,
+    totalCount: results.length,
+    sortBy,
+    limit
+  };
+}
+
+async function executeVinylArtistCatalog(params: any, supabase: any): Promise<any> {
+  console.log('[chat-response] Executing vinyl_artist_catalog with params:', params);
+  
+  const { artistName, includeStats = true } = params;
+  
+  if (!artistName) {
+    throw new Error('Artist name is required');
+  }
+  
+  // Find the artist
+  const { data: artists, error: artistError } = await supabase
+    .from('artist')
+    .select('id, name')
+    .ilike('name', `%${artistName}%`);
+
+  if (artistError) {
+    throw artistError;
+  }
+
+  if (!artists || artists.length === 0) {
+    return {
+      success: false,
+      message: `No artist found matching "${artistName}"`,
+      artistName,
+      albums: [],
+      stats: null
+    };
+  }
+
+  // If multiple artists found, use the first one
+  const artist = artists[0];
+  
+  // Get all albums by this artist
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select(`
+      id,
+      title,
+      artist_id,
+      variant,
+      purchase_date,
+      acquired_date,
+      preordered,
+      artwork_url,
+      release_year,
+      size
+    `)
+    .eq('artist_id', artist.id)
+    .order('release_year', { ascending: true });
+
+  if (albumError) {
+    throw albumError;
+  }
+
+  const results = albums.map(album => ({
+    ...album,
+    artist_name: artist.name
+  }));
+  
+  let stats = null;
+  
+  if (includeStats && results.length > 0) {
+    // Calculate artist-specific statistics
+    const releaseYears = results.filter(a => a.release_year).map(a => a.release_year);
+    const acquiredDates = results.filter(a => a.acquired_date).map(a => a.acquired_date);
+    
+    stats = {
+      totalAlbums: results.length,
+      earliestRelease: releaseYears.length > 0 ? Math.min(...releaseYears) : null,
+      latestRelease: releaseYears.length > 0 ? Math.max(...releaseYears) : null,
+      firstAcquired: acquiredDates.length > 0 ? acquiredDates.sort()[0] : null,
+      lastAcquired: acquiredDates.length > 0 ? acquiredDates.sort().reverse()[0] : null,
+      preorderedCount: results.filter(a => a.preordered).length,
+      averageReleaseYear: releaseYears.length > 0 ? Math.round(releaseYears.reduce((a, b) => a + b, 0) / releaseYears.length) : null
+    };
+  }
+  
+  return {
+    success: true,
+    message: `Found ${results.length} albums by ${artist.name} in your collection`,
+    artist: {
+      id: artist.id,
+      name: artist.name
+    },
+    albums: results,
+    stats
+  };
+}
+
+async function executeVinylFuzzySearch(params: any, supabase: any): Promise<any> {
+  console.log('[chat-response] Executing vinyl_fuzzy_search with params:', params);
+  
+  const { searchTerm, limit = 20 } = params;
+  
+  if (!searchTerm) {
+    throw new Error('Search term is required');
+  }
+  
+  // Search for albums with partial name matches
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select(`
+      id,
+      title,
+      artist_id,
+      variant,
+      purchase_date,
+      acquired_date,
+      preordered,
+      artwork_url,
+      release_year,
+      size
+    `)
+    .ilike('title', `%${searchTerm}%`)
+    .order('title', { ascending: true })
+    .limit(limit);
+
+  if (albumError) {
+    throw albumError;
+  }
+
+  if (!albums || albums.length === 0) {
+    return {
+      success: false,
+      message: `No albums found containing "${searchTerm}" in the title`,
+      searchTerm,
+      albums: [],
+      totalResults: 0
+    };
+  }
+
+  // Get artist names for all albums
+  const results = await Promise.all(albums.map(async (album) => {
+    const { data: artist, error: artistError } = await supabase
+      .from('artist')
+      .select('name')
+      .eq('id', album.artist_id)
+      .single();
+
+    if (artistError) {
+      console.error('Error fetching artist name:', artistError);
+      return {
+        ...album,
+        artist_name: 'Unknown Artist'
+      };
+    }
+
+    return {
+      ...album,
+      artist_name: artist.name
+    };
+  }));
+  
+  return {
+    success: true,
+    message: `Found ${results.length} albums containing "${searchTerm}" in the title`,
+    searchTerm,
+    albums: results,
+    totalResults: results.length,
+    limit
+  };
+}
 
 
 // Function to execute operations with reflection and planning
@@ -680,6 +1020,15 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
       case 'vinyl_remove_album':
         result = await executeVinylRemoveAlbum(operation.parameters, supabase);
         break;
+      case 'vinyl_collection_overview':
+        result = await executeVinylCollectionOverview(operation.parameters, supabase);
+        break;
+      case 'vinyl_artist_catalog':
+        result = await executeVinylArtistCatalog(operation.parameters, supabase);
+        break;
+      case 'vinyl_fuzzy_search':
+        result = await executeVinylFuzzySearch(operation.parameters, supabase);
+        break;
       default:
         throw new Error(`Unknown tool: ${operation.tool}`);
     }
@@ -781,6 +1130,9 @@ Use this context only to resolve references, not for commentary.` : '';
 **Conditional Found**: "I checked and you already have [album] by [artist] in your collection."
 **Conditional Added**: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
 **Alternative Search**: "I didn't find [original search], but I found [X] albums by [artist]: [list]"
+**Collection Overview**: "Your vinyl collection contains [X] albums by [Y] artists. Here are your albums: [list]. Collection stats: [stats]"
+**Artist Catalog**: "You have [X] albums by [artist] in your collection: [list]. Artist stats: [stats]"
+**Fuzzy Search**: "I found [X] albums containing '[search term]' in the title: [list]"
 **Errors**: "Sorry, I couldn't [action] because [reason]."`;
 
     const systemPrompt = `## Role
@@ -796,11 +1148,20 @@ Convert database results into natural, conversational responses that are informa
 - Avoid contradictory statements
 - Use friendly, enthusiastic tone for positive results
 - Be clear about what was searched for vs what was found
+- **When listing multiple albums, artists, or results, ALWAYS use HTML <ul> or <ol> lists.**
+
+## List Formatting Example
+If you need to list albums, use:
+<ul>
+  <li>Album 1</li>
+  <li>Album 2</li>
+  <li>Album 3</li>
+</ul>
 
 ## Response Logic
 **For collection queries:**
 - If searching for specific album + artist and found: "Yes! You have [album] by [artist] in your collection."
-- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: [list]"
+- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: <ul><li>Album 1</li><li>Album 2</li></ul>"
 - If searching for specific album + artist and not found: "No, you don't have [album] by [artist] in your collection."
 - If searching for artist only and not found: "No, you don't have any albums by [artist] in your collection."
 
@@ -813,7 +1174,16 @@ Convert database results into natural, conversational responses that are informa
 - Didn't have, now added: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
 
 **For alternative searches:**
-- "I didn't find [original search], but I found [X] albums by [artist]: [list]"
+- "I didn't find [original search], but I found [X] albums by [artist]: <ul><li>Album 1</li><li>Album 2</li></ul>"
+
+**For collection overview:**
+- "Your vinyl collection contains [X] albums by [Y] artists. Here are your albums: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul> Collection stats: [total albums] albums, [total artists] artists, [recent albums] recent acquisitions"
+
+**For artist catalog:**
+- "You have [X] albums by [artist] in your collection: <ul><li>Album 1 (Year)</li><li>Album 2 (Year)</li></ul> Artist stats: [total albums] albums, earliest release [year], latest release [year]"
+
+**For fuzzy search:**
+- "I found [X] albums containing '[search term]' in the title: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul>"
 
 ${responseTemplates}
 
@@ -824,7 +1194,7 @@ Results: ${taskInfo}
 ${contextSection}
 
 ## Response
-Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself.`;
+Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself. Use HTML <ul> or <ol> lists for any list of albums, artists, or results.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
