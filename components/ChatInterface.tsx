@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 import ChatMessage from './ChatMessage';
-import ImageUpload from './ImageUpload';
 import { ChatMessageType, ChatResponse } from '../data/types';
 import { createClient } from '../utils/supabase/client';
 import { memoryManager } from '../utils/agent/memory';
@@ -15,10 +13,8 @@ interface ChatInterfaceProps {
 export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<Map<string, any>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessageType[]>([]);
@@ -47,81 +43,23 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Clean up blob URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      // Clean up selected image blob URL only
-      if (selectedImageUrl && selectedImageUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(selectedImageUrl);
-      }
-    };
-  }, [selectedImageUrl]);
 
-  const handleImageSelect = (file: File) => {
-    // Clean up previous blob URL if it exists
-    if (selectedImageUrl && selectedImageUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(selectedImageUrl);
-    }
-    
-    // Create new blob URL for preview
-    const newBlobUrl = URL.createObjectURL(file);
-    setSelectedImageUrl(newBlobUrl);
-    setSelectedImage(file);
-    setError(null);
-  };
 
-  const handleImageError = (message: string) => {
-    setError(message);
-  };
 
-  const fileToBase64 = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64Data = result.split(',')[1]; // Remove data:image/jpeg;base64, prefix
-        resolve(base64Data);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() && !selectedImage) return;
-
-    let imageData: string | undefined;
-    let mimeType: string | undefined;
-    const imageFile = selectedImage;
-
-    // Convert image to base64 if present
-    if (imageFile) {
-      try {
-        imageData = await fileToBase64(imageFile);
-        mimeType = imageFile.type;
-      } catch (error) {
-        console.error('Image conversion error:', error);
-        setError('Failed to process image. Please try again.');
-        return;
-      }
-    }
+    if (!inputValue.trim()) return;
 
     const userMessage: ChatMessageType = {
       id: Date.now().toString(),
-      content: inputValue.trim() || '',
+      content: inputValue.trim(),
       sender: 'user',
       timestamp: new Date(),
-      type: imageFile ? 'image' : 'text',
-      imageUrl: selectedImageUrl || undefined,
-      imageFile: imageFile || undefined
+      type: 'text'
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
-    setSelectedImage(null);
-    
-    // Don't revoke the blob URL here - it's now owned by the message
-    setSelectedImageUrl(null);
     
     // Add user message to short-term memory
     memoryManager.addMessage(userMessage);
@@ -137,10 +75,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       const { data, error } = await supabase.functions.invoke('chat-response', {
         body: { 
           message: userMessage.content,
-          conversationContext: conversationContext,
-          hasImage: !!imageFile,
-          imageData: imageData,
-          mimeType: mimeType
+          conversationContext: conversationContext
         }
       });
 
@@ -217,13 +152,7 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     }
   };
 
-  const handleRemoveImage = () => {
-    if (selectedImageUrl && selectedImageUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(selectedImageUrl);
-    }
-    setSelectedImageUrl(null);
-    setSelectedImage(null);
-  };
+
 
   const handleAlbumConfirm = async (operationId: string, selectedArtworkUrl?: string) => {
     const confirmation = pendingConfirmations.get(operationId);
@@ -312,22 +241,24 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     });
   };
 
-  const canSend = (inputValue.trim() || selectedImage) && !isLoading;
+  const canSend = inputValue.trim() && !isLoading;
 
   return (
-    <div className={`flex flex-col h-screen w-full bg-white ${className}`}>
-      {/* Header */}
-      <div className="border-b border-gray-200 p-4 bg-white">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-xl font-semibold text-gray-900">Vinyl Collection Assistant</h1>
+    <div className={`flex flex-col h-full w-full bg-transparent ${className}`}>
+      {/* Header - only show if not in modal */}
+      {!className.includes('h-full') && (
+        <div className="border-b border-gray-200 p-4 bg-white">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-xl font-semibold text-gray-900">Vinyl Collection Assistant</h1>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Message List Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-8">
-            <p>Start a conversation by typing a message or uploading an image below</p>
+            <p>Start a conversation by typing a message below</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -365,41 +296,14 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
 
       {/* Error Display */}
       {error && (
-        <div className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg mx-auto max-w-4xl w-full mb-2">
+        <div className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg w-full mb-2">
           {error}
         </div>
       )}
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 p-4 w-full bg-white">
-        <div className="max-w-4xl mx-auto flex items-center space-x-2">
-          {/* Image Upload Icon Button */}
-          <ImageUpload
-            onImageSelect={handleImageSelect}
-            onError={handleImageError}
-            className=""
-          />
-          {/* If image selected, show thumbnail */}
-          {selectedImageUrl && (
-            <div className="relative mr-2">
-              <Image
-                src={selectedImageUrl}
-                alt="Selected"
-                width={40}
-                height={40}
-                className="w-10 h-10 object-cover rounded-lg border border-gray-300"
-              />
-              <button
-                onClick={handleRemoveImage}
-                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600 transition-colors text-xs"
-                type="button"
-                disabled={isLoading}
-                aria-label="Remove image"
-              >
-                ×
-              </button>
-            </div>
-          )}
+      <div className="border-t border-gray-200 p-4 w-full bg-white/90 backdrop-blur-sm">
+        <div className="flex items-center space-x-2">
           {/* Text Input and Send Button */}
           <input
             type="text"

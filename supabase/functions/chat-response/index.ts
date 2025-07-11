@@ -796,11 +796,20 @@ Convert database results into natural, conversational responses that are informa
 - Avoid contradictory statements
 - Use friendly, enthusiastic tone for positive results
 - Be clear about what was searched for vs what was found
+- **When listing multiple albums, artists, or results, ALWAYS use HTML <ul> or <ol> lists.**
+
+## List Formatting Example
+If you need to list albums, use:
+<ul>
+  <li>Album 1</li>
+  <li>Album 2</li>
+  <li>Album 3</li>
+</ul>
 
 ## Response Logic
 **For collection queries:**
 - If searching for specific album + artist and found: "Yes! You have [album] by [artist] in your collection."
-- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: [list]"
+- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: <ul><li>Album 1</li><li>Album 2</li></ul>"
 - If searching for specific album + artist and not found: "No, you don't have [album] by [artist] in your collection."
 - If searching for artist only and not found: "No, you don't have any albums by [artist] in your collection."
 
@@ -813,7 +822,7 @@ Convert database results into natural, conversational responses that are informa
 - Didn't have, now added: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
 
 **For alternative searches:**
-- "I didn't find [original search], but I found [X] albums by [artist]: [list]"
+- "I didn't find [original search], but I found [X] albums by [artist]: <ul><li>Album 1</li><li>Album 2</li></ul>"
 
 ${responseTemplates}
 
@@ -824,7 +833,7 @@ Results: ${taskInfo}
 ${contextSection}
 
 ## Response
-Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself.`;
+Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself. Use HTML <ul> or <ol> lists for any list of albums, artists, or results.`;
 
     const messages = [
       { role: 'system', content: systemPrompt }
