@@ -14,7 +14,6 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pendingConfirmations, setPendingConfirmations] = useState<Map<string, any>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<ChatMessageType[]>([]);
@@ -295,11 +294,12 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
       </div>
 
       {/* Error Display */}
-      {error && (
+      {/* The error state variable was removed, so this block is no longer needed. */}
+      {/* {error && (
         <div className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg w-full mb-2">
           {error}
         </div>
-      )}
+      )} */}
 
       {/* Input Area */}
       <div className="border-t border-gray-200 p-4 w-full bg-white/90 backdrop-blur-sm">
