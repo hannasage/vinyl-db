@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface CollectionInsightsRequest {
-  insightType?: 'genres' | 'eras' | 'themes' | 'recommendations' | 'temporal';
+  insightType?: 'genres' | 'eras' | 'themes' | 'recommendations' | 'temporal' | 'basic_stats';
   limit?: number;
 }
 
@@ -97,6 +97,11 @@ async function generateCollectionInsights(
       case 'temporal':
         analysisPrompt = `Analyze the temporal patterns in this vinyl collection. Look at purchase dates, acquisition patterns, and how collecting habits have evolved over time.`;
         outputFormat = `Return a JSON array of temporal insights with: type, title, description, confidence (0-1), and relatedAlbums array.`;
+        break;
+      
+      case 'basic_stats':
+        analysisPrompt = `Provide basic statistics about this vinyl collection, including total count, artist diversity, and general overview.`;
+        outputFormat = `Return a JSON array of basic statistics insights with: type, title, description, confidence (0-1), and relatedAlbums array.`;
         break;
       
       default:

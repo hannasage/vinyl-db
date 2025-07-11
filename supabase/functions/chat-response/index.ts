@@ -322,21 +322,22 @@ Vinyl collection insights assistant.
 Plan collection analysis operations.
 
 ## Output
-Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "type", "limit": 5}, "description": "desc", "requiresConfirmation": false}]}
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 1000}, "description": "desc", "requiresConfirmation": false}]}
 
-## Insight Types
-- genres: Analyze musical genres
-- eras: Analyze time periods
-- themes: Analyze collection themes
-- temporal: Analyze temporal patterns
-- recommendations: Generate recommendations
+## Query Types
+- Simple counts: "how many albums do i have" → query: "all albums", searchType: "combined"
+- Collection overview: "what's in my collection" → query: "all albums", searchType: "combined"
+- Complex analysis: Use vinyl_collection_insights with specific insightType
 
 ## Examples
+User: "How many albums do I have?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 1000}, "description": "Get all albums for count", "requiresConfirmation": false}]}
+
+User: "What's in my collection?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 100}, "description": "Get collection overview", "requiresConfirmation": false}]}
+
 User: "What genres do I have?"
 {"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "genres", "limit": 5}, "description": "Analyze genres in collection", "requiresConfirmation": false}]}
-
-User: "Analyze my collection trends"
-{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "temporal", "limit": 3}, "description": "Analyze temporal patterns", "requiresConfirmation": false}]}
 
 {CONTEXT}
 
@@ -590,6 +591,12 @@ async function executeVinylCollectionQuery(params: any, supabase: any, authHeade
   
   if (!query) {
     throw new Error('Query parameter is required');
+  }
+
+  // Check for "all albums" queries that need direct database access
+  if (query.toLowerCase().includes('all albums') || query.toLowerCase().includes('how many') || query.toLowerCase().includes('what\'s in my collection')) {
+    console.log('[chat-response] Detected collection overview query, using direct database query');
+    return await handleCollectionOverviewQuery(query, supabase, limit);
   }
 
   // Check for temporal queries that need special handling
@@ -930,6 +937,106 @@ async function handleTemporalQuery(query: string, supabase: any, limit: number):
     searchType: 'temporal',
     totalResults: filteredResults.length,
     temporalQuery: true
+  };
+}
+
+// Helper function to handle collection overview queries directly
+async function handleCollectionOverviewQuery(query: string, supabase: any, limit: number): Promise<any> {
+  const queryLower = query.toLowerCase();
+  
+  // Get total count of albums
+  const { count: totalAlbums, error: countError } = await supabase
+    .from('album')
+    .select('*', { count: 'exact', head: true });
+
+  if (countError) {
+    throw countError;
+  }
+
+  // Get total count of artists
+  const { count: totalArtists, error: artistCountError } = await supabase
+    .from('artist')
+    .select('*', { count: 'exact', head: true });
+
+  if (artistCountError) {
+    throw artistCountError;
+  }
+
+  // If it's just a count query, return the count
+  if (queryLower.includes('how many')) {
+    return {
+      found: true,
+      message: `You have ${totalAlbums || 0} albums by ${totalArtists || 0} different artists in your collection.`,
+      query,
+      searchType: 'overview',
+      totalResults: totalAlbums || 0,
+      totalArtists: totalArtists || 0,
+      isCountQuery: true
+    };
+  }
+
+  // For overview queries, get some sample albums
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select(`
+      id,
+      title,
+      artist_id,
+      release_year,
+      purchase_date,
+      acquired_date
+    `)
+    .order('acquired_date', { ascending: false })
+    .limit(limit);
+
+  if (albumError) {
+    throw albumError;
+  }
+
+  if (!albums || albums.length === 0) {
+    return {
+      found: false,
+      message: 'Your collection is empty. Start adding albums to get started!',
+      query,
+      searchType: 'overview',
+      albums: [],
+      totalResults: 0,
+      totalArtists: 0
+    };
+  }
+
+  // Get artist names
+  const results = await Promise.all(albums.map(async (album) => {
+    const { data: artist, error: artistError } = await supabase
+      .from('artist')
+      .select('name')
+      .eq('id', album.artist_id)
+      .single();
+
+    if (artistError) {
+      return {
+        ...album,
+        artist_name: 'Unknown Artist'
+      };
+    }
+
+    return {
+      ...album,
+      artist_name: artist.name
+    };
+  }));
+
+  const message = `Your collection contains ${totalAlbums} albums by ${totalArtists} artists. Here are your ${results.length} most recent additions:`;
+
+  return {
+    found: true,
+    message: `${message} ${results.map(a => `"${a.title}" by ${a.artist_name}`).join(', ')}`,
+    albums: results,
+    query,
+    searchType: 'overview',
+    totalResults: totalAlbums || 0,
+    totalArtists: totalArtists || 0,
+    overviewQuery: true
   };
 }
 
