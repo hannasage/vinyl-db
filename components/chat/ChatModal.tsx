@@ -70,7 +70,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
     setIsRunningBatch(true);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke('batch-embeddings', {
+      const { error } = await supabase.functions.invoke('batch-embeddings', {
         body: { type: 'all', limit: 100 }
       });
       
@@ -78,8 +78,6 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
         console.error('Error running batch embeddings:', error);
         return;
       }
-      
-
       
       // Refresh status after completion
       await checkEmbeddingStatus();
