@@ -19,8 +19,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
   } | null>(null);
   const [isRunningBatch, setIsRunningBatch] = useState(false);
 
-  // Debug logging
-  console.log('ChatModal - isOpen:', isOpen);
+
 
   // Handle escape key to close modal
   useEffect(() => {
@@ -80,7 +79,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
         return;
       }
       
-      console.log('Batch embeddings completed:', data);
+
       
       // Refresh status after completion
       await checkEmbeddingStatus();

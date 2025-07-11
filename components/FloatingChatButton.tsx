@@ -12,8 +12,7 @@ interface FloatingChatButtonProps {
 export default function FloatingChatButton({ onOpen, isVisible, isModalOpen = false }: FloatingChatButtonProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Debug logging
-  console.log('FloatingChatButton - isVisible:', isVisible, 'isModalOpen:', isModalOpen);
+
 
   if (!isVisible) return null;
 
@@ -21,7 +20,6 @@ export default function FloatingChatButton({ onOpen, isVisible, isModalOpen = fa
     <div className="fixed bottom-6 right-6 z-[9999] pointer-events-auto">
               <button
           onClick={(e) => {
-            console.log('Button clicked!');
             e.preventDefault();
             e.stopPropagation();
             onOpen();
