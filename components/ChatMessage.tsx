@@ -41,7 +41,7 @@ export default function ChatMessage({
             ? 'bg-blue-500 text-white'
             : 'bg-gray-200 text-gray-800 agent-bubble'
         }`}
-      >
+      > 
         {/* Image Display */}
         {type === 'image' && imageUrl && (
           <div className="mb-2">

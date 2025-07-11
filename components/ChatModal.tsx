@@ -44,10 +44,10 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
       />
       
       {/* Chat Pane */}
-      <div className="fixed bottom-24 right-4 z-50">
+      <div className="fixed bottom-24 inset-x-0 z-50 flex justify-center">
         <div className="
-          relative w-96 h-[600px] max-h-[80vh]
-          bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20
+          relative w-full max-w-md max-w-full h-[80vh] max-h-screen overflow-y-auto
+          bg-white/90 backdrop-blur-md rounded-2xl sm:rounded-2xl rounded-lg shadow-2xl border border-white/20
           animate-in slide-in-from-bottom-4 duration-300
           flex flex-col
         ">
