@@ -1,9 +1,9 @@
 import React from 'react';
 import Image from 'next/image';
-import CollectionStatus from './CollectionStatus';
-import AlbumAction from './AlbumAction';
-import BatchProgress from './BatchProgress';
-import AlbumConfirmationCard from './AlbumConfirmationCard';
+import CollectionStatus from '../album/CollectionStatus';
+import AlbumAction from '../album/AlbumAction';
+import BatchProgress from '../album/BatchProgress';
+import AlbumConfirmationCard from '../album/AlbumConfirmationCard';
 
 export interface ChatMessageProps {
   id: string;

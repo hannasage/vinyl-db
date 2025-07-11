@@ -1,7 +1,7 @@
 "use client"
 import React, { useState } from 'react';
 import { FullAlbumDetails } from '@/data/types';
-import AlbumCover from '@/components/AlbumCover';
+import AlbumCover from '@/components/album/AlbumCover';
 import classNames from 'classnames';
 
 export const AlbumArtBox = ({ album }: { album: FullAlbumDetails }) => {

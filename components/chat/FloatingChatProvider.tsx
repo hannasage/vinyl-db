@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '../utils/supabase/client';
+import { createClient } from '../../utils/supabase/client';
 import FloatingChatButton from './FloatingChatButton';
 import ChatModal from './ChatModal';
 
@@ -34,12 +34,10 @@ export default function FloatingChatProvider() {
   }, []);
 
   const handleOpenChat = () => {
-    console.log('handleOpenChat called - setting modal to true');
     setIsModalOpen(true);
   };
 
   const handleCloseChat = () => {
-    console.log('handleCloseChat called - setting modal to false');
     setIsModalOpen(false);
   };
 
@@ -56,9 +54,7 @@ export default function FloatingChatProvider() {
     return null;
   }
 
-  // Debug logging
-  console.log('FloatingChatProvider - isAuthenticated:', isAuthenticated);
-  console.log('FloatingChatProvider - isModalOpen:', isModalOpen);
+
 
   return (
     <>

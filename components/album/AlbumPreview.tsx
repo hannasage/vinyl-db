@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { AlbumPreviewData } from '../data/types';
+import { AlbumPreviewData } from '../../data/types';
 
 interface AlbumPreviewProps {
   album: AlbumPreviewData;

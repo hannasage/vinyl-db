@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { Anybody } from "next/font/google";
-import DotMatrixBackground from '@/components/DotMatrixBackground';
-import FloatingChatProvider from '@/components/FloatingChatProvider';
+import DotMatrixBackground from '@/components/ui/DotMatrixBackground';
+import FloatingChatProvider from '@/components/chat/FloatingChatProvider';
 import "./globals.css";
 
 const inter = Anybody({ subsets: ["latin"] });

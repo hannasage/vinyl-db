@@ -2,8 +2,8 @@
 import React from 'react';
 import classNames from 'classnames';
 
-type ButtonDefaultProps = { title: string, label: string, disabled?: boolean }
-const MainFilterButton = ({ title, label, disabled = false }: ButtonDefaultProps) => {
+type ButtonDefaultProps = { title: string, label: string, disabled?: boolean, onClick?: () => void }
+const MainFilterButton = ({ title, label, disabled = false, onClick }: ButtonDefaultProps) => {
   const comingSoonAfter = `
       after:opacity-100 
       after:absolute 
@@ -20,15 +20,21 @@ const MainFilterButton = ({ title, label, disabled = false }: ButtonDefaultProps
       after:drop-shadow-md
     `
   return (
-    <button title={title} disabled={disabled} className={classNames(
-      'px-7',
-      'py-3',
-      'rounded-full',
-      {
-        [comingSoonAfter]: disabled,
-        ['bg-gray-300 bg-opacity-50']: disabled,
-        ['bg-red-700']: !disabled
-      })}>
+    <button 
+      title={title} 
+      disabled={disabled} 
+      onClick={onClick}
+      className={classNames(
+        'px-7',
+        'py-3',
+        'rounded-full',
+        {
+          [comingSoonAfter]: disabled,
+          ['bg-gray-300 bg-opacity-50']: disabled,
+          ['bg-red-700']: !disabled
+        }
+      )}
+    >
       <p className={classNames('mb-[-6px]', 'text-3xl', {
         ['grayscale opacity-50']: disabled
       })}>
@@ -44,7 +50,7 @@ export const FilterButtonRow = () => {
     { title: 'Album', label: '💿', active: true },
     { title: 'Artists', label: '👩🏻‍🎤', active: false }
   ]
-  
+
   const MainFilters = () => (
     <ul className={'flex flex-row gap-2 my-auto'}>
       {MAIN_NAV.map((s, i) =>

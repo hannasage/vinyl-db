@@ -22,111 +22,486 @@ interface ExecutionResult {
 
 // Input validation functions
 function validateUserInput(message: string): string {
-  if (!message || typeof message !== 'string') {
-    return '';
-  }
+  if (!message || typeof message !== 'string') return '';
   
   return message
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML
+    .replace(/[<>]/g, '') // Remove HTML-like characters
     .replace(/\s+/g, ' ') // Normalize whitespace
-    .substring(0, 1000); // Limit length
+    .substring(0, 500); // Limit length
 }
 
 function validateConversationContext(context: string): string {
-  if (!context || typeof context !== 'string') {
-    return '';
-  }
+  if (!context || typeof context !== 'string') return '';
   
   return context
     .trim()
-    .replace(/[<>]/g, '')
-    .substring(0, 2000); // Limit context length
+    .replace(/[<>]/g, '') // Remove HTML-like characters
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .substring(0, 2000); // Limit length
 }
 
-// Tool definitions
+// Conversation summarization function
+async function summarizeConversation(context: string, openai: OpenAI): Promise<string> {
+  if (!context || context.length < 1000) return context; // Only summarize long contexts
+  
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Summarize the conversation context in 2-3 sentences, focusing on key references and user preferences. Return only the summary.'
+        },
+        {
+          role: 'user',
+          content: `Summarize this conversation context:\n\n${context}`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 150
+    });
+
+    return completion.choices[0]?.message?.content || context;
+  } catch (error) {
+    console.error('Error summarizing conversation:', error);
+    return context; // Fallback to original context
+  }
+}
+
+// Context relevance scoring
+function calculateContextRelevance(context: string, currentQuery: string): number {
+  if (!context || !currentQuery) return 0;
+  
+  const contextLower = context.toLowerCase();
+  const queryLower = currentQuery.toLowerCase();
+  
+  // Simple relevance scoring based on keyword overlap
+  const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+  const matchingWords = queryWords.filter(word => contextLower.includes(word));
+  
+  return matchingWords.length / queryWords.length;
+}
+
+// AI-powered prompt template selection
+async function selectPromptTemplate(query: string, context: string): Promise<'search' | 'add' | 'remove' | 'insights' | 'general'> {
+  try {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      // Fallback to simple pattern matching if no API key
+      return selectPromptTemplateFallback(query);
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    const templateSelectionPrompt = `## Task
+Classify the user's vinyl collection query into the most appropriate template type.
+
+## Template Types
+- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection", "what year did X come out", "when did X come out", "oldest album", "newest album", "albums from 2020")
+- **add**: Requests to add new albums to collection (e.g., "add X", "if I don't have X, add it")
+- **remove**: Requests to remove albums from collection (e.g., "remove X", "delete X")
+- **insights**: Requests for analysis/statistics about collection (e.g., "analyze my collection", "what genres do I have", "collection trends")
+- **general**: General questions or unclear intent
+
+## Examples
+- "do i own any albums by Jane Remover" → search
+- "what year did Kids come out" → search
+- "when did Abbey Road come out" → search
+- "what's my oldest album" → search
+- "what's my newest album" → search
+- "albums from the 70s" → search
+- "add Abbey Road by The Beatles" → add
+- "remove Sgt Pepper" → remove
+- "what genres do I have" → insights
+- "analyze my collection trends" → insights
+- "hello" → general
+
+## Rules
+- Artist names containing words like "remove" should NOT trigger remove template
+- Focus on user intent, not just keyword matching
+- When in doubt, prefer "search" over "general"
+- Queries about specific album details (release year, when it came out) are search queries
+- Temporal queries (oldest, newest, albums from year) are search queries
+
+## User Query
+"${query}"
+
+## Response
+Return ONLY the template type: search, add, remove, insights, or general`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'system', content: templateSelectionPrompt }],
+      temperature: 0.1,
+      max_tokens: 10
+    });
+
+    const response = completion.choices[0]?.message?.content?.trim().toLowerCase();
+    
+    if (response && ['search', 'add', 'remove', 'insights', 'general'].includes(response)) {
+      console.log(`[OPTIMIZATION] AI selected template: ${response} for query: "${query}"`);
+      return response as 'search' | 'add' | 'remove' | 'insights' | 'general';
+    }
+    
+    console.log(`[OPTIMIZATION] AI returned invalid template: "${response}", falling back to pattern matching`);
+    return selectPromptTemplateFallback(query);
+    
+  } catch (error) {
+    console.error('[OPTIMIZATION] AI template selection failed:', error);
+    console.log('[OPTIMIZATION] Falling back to pattern matching');
+    return selectPromptTemplateFallback(query);
+  }
+}
+
+// Fallback pattern matching for when AI is unavailable
+function selectPromptTemplateFallback(query: string): 'search' | 'add' | 'remove' | 'insights' | 'general' {
+  const queryLower = query.toLowerCase();
+  
+  // Check for explicit action words first (with word boundaries)
+  const addPatterns = /\b(add|new|create|insert)\b/;
+  const removePatterns = /\b(remove|delete|delete|take out|get rid of)\b/;
+  const insightPatterns = /\b(insight|analyze|trend|pattern|statistic|summary)\b/;
+  const searchPatterns = /\b(find|search|have|show|own|got|got any|do i have|do you have|what do i have|what's in my collection)\b/;
+  
+  if (addPatterns.test(queryLower)) return 'add';
+  if (removePatterns.test(queryLower)) return 'remove';
+  if (insightPatterns.test(queryLower)) return 'insights';
+  if (searchPatterns.test(queryLower)) return 'search';
+  
+  // Check for album-specific queries (asking about specific albums or their details)
+  const albumQueryPatterns = [
+    /\bwhat year\b/, // "what year did X come out"
+    /\bwhen\b/, // "when did X come out"
+    /\brelease\b/, // "release date", "release year"
+    /\bcome out\b/, // "when did X come out"
+    /\bcame out\b/, // "when did X come out"
+    /\bout\b/, // "what year did X come out"
+  ];
+  
+  if (albumQueryPatterns.some(pattern => pattern.test(queryLower))) {
+    return 'search';
+  }
+  
+  // Check for temporal queries (oldest, newest, albums from year)
+  const temporalQueryPatterns = [
+    /\boldest\b/, // "oldest album"
+    /\bnewest\b/, // "newest album"
+    /\bearliest\b/, // "earliest album"
+    /\blatest\b/, // "latest album"
+    /\bfirst\b/, // "first album"
+    /\blast\b/, // "last album"
+    /\brecent\b/, // "recent albums"
+    /\bvintage\b/, // "vintage albums"
+    /\bclassic\b/, // "classic albums"
+  ];
+  
+  if (temporalQueryPatterns.some(pattern => pattern.test(queryLower))) {
+    return 'search';
+  }
+  
+  // Fallback: check for common search patterns without explicit action words
+  const searchIndicators = [
+    'by', // "albums by artist"
+    'from', // "albums from year"
+    'in', // "albums in collection"
+    'of', // "albums of artist"
+    'with', // "albums with title"
+    'like', // "albums like"
+    'similar to', // "albums similar to"
+    'genre', // "rock albums"
+    'year', // "albums from 2020"
+    'decade', // "albums from the 80s"
+    'era' // "albums from the 70s"
+  ];
+  
+  if (searchIndicators.some(indicator => queryLower.includes(indicator))) {
+    return 'search';
+  }
+  
+  return 'general';
+}
+
+// Optimized prompt templates
+const PROMPT_TEMPLATES = {
+  // Core planning prompt (reduced from ~800 to ~300 tokens)
+  core: `## Role
+Vinyl collection planning assistant.
+
+## Task
+Create operation plans using available tools.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "description": "desc", "requiresConfirmation": bool}]}
+
+## Rules
+- JSON only, no explanatory text
+- Add/remove operations require confirmation
+- Support conditional logic ("if I don't have X, add it")
+- Distinguish artist vs album queries
+
+## Available Tools
+{TOOLS}
+
+## Query Patterns
+- Artist queries: "albums by [artist]" → searchType: "artist"
+- Album queries: "do I have [album]", "what year did [album] come out" → searchType: "album"
+- Combined: "[album] by [artist]" → searchType: "combined"
+- Temporal: "oldest", "newest", "2013" → searchType: "temporal"
+- Genre/style: "rock albums" → searchType: "album"
+
+## Examples
+User: "Do I have Dark Side of the Moon?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Dark Side of the Moon", "searchType": "combined"}, "description": "Search for Dark Side of the Moon", "requiresConfirmation": false}]}
+
+User: "What's my oldest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection", "requiresConfirmation": false}]}
+
+User: "What year did Kids come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search for Kids album to find release year", "requiresConfirmation": false}]}
+
+User: "When did Abbey Road come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search for Abbey Road album to find release year", "requiresConfirmation": false}]}
+
+User: "Add Abbey Road by The Beatles"
+{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles", "requiresConfirmation": true}]}
+
+User: "If I don't have Revolver, add it"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Revolver", "searchType": "combined"}, "description": "Check if Revolver exists", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+{PREVIOUS_RESULTS}
+
+## Current Request
+"{QUERY}"
+
+{REFLECTION_ANALYSIS}`,
+
+  // Search-focused prompt (for search queries)
+  search: `## Role
+Vinyl collection search assistant.
+
+## Task
+Plan search operations using semantic similarity.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "search", "searchType": "type"}, "description": "desc", "requiresConfirmation": false}]}
+
+## Search Types
+- Artist: "albums by [artist]" → searchType: "artist"
+- Album: "do I have [album]", "what year did [album] come out" → searchType: "album"  
+- Combined: "[album] by [artist]" → searchType: "combined"
+- Temporal: "oldest", "newest", "2013" → searchType: "temporal"
+
+## Examples
+User: "What do I have by The Beatles?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "The Beatles", "searchType": "artist"}, "description": "Search for Beatles albums", "requiresConfirmation": false}]}
+
+User: "Find albums from the 70s"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums from the 1970s", "searchType": "temporal"}, "description": "Search for 70s albums", "requiresConfirmation": false}]}
+
+User: "What's my oldest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection", "requiresConfirmation": false}]}
+
+User: "What's my newest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "newest album", "searchType": "temporal"}, "description": "Find the newest album in the collection", "requiresConfirmation": false}]}
+
+User: "What year did Kids come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search for Kids album to find release year", "requiresConfirmation": false}]}
+
+User: "When did Abbey Road come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search for Abbey Road album to find release year", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`,
+
+  // Add-focused prompt (for add operations)
+  add: `## Role
+Vinyl collection add assistant.
+
+## Task
+Plan album addition operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "name", "artistName": "artist"}, "description": "desc", "requiresConfirmation": true}]}
+
+## Rules
+- Always requires confirmation
+- Extract album and artist names
+- Support conditional logic
+
+## Examples
+User: "Add Abbey Road by The Beatles"
+{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles", "requiresConfirmation": true}]}
+
+User: "If I don't have Revolver, add it"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Revolver", "searchType": "combined"}, "description": "Check if Revolver exists", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+{PREVIOUS_RESULTS}
+
+## Current Request
+"{QUERY}"
+
+{REFLECTION_ANALYSIS}`,
+
+  // Remove-focused prompt (for remove operations)
+  remove: `## Role
+Vinyl collection remove assistant.
+
+## Task
+Plan album removal operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "name", "artistName": "artist"}, "description": "desc", "requiresConfirmation": true}]}
+
+## Rules
+- Always requires confirmation
+- Extract album and artist names
+
+## Examples
+User: "Remove Sgt Pepper"
+{"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Sgt Pepper", "artistName": "The Beatles"}, "description": "Remove Sgt Pepper", "requiresConfirmation": true}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`,
+
+  // Insights-focused prompt (for analysis queries)
+  insights: `## Role
+Vinyl collection insights assistant.
+
+## Task
+Plan collection analysis operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 1000}, "description": "desc", "requiresConfirmation": false}]}
+
+## Query Types
+- Simple counts: "how many albums do i have" → query: "all albums", searchType: "combined"
+- Collection overview: "what's in my collection" → query: "all albums", searchType: "combined"
+- Complex analysis: Use vinyl_collection_insights with specific insightType
+
+## Examples
+User: "How many albums do I have?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 1000}, "description": "Get all albums for count", "requiresConfirmation": false}]}
+
+User: "What's in my collection?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums", "searchType": "combined", "limit": 100}, "description": "Get collection overview", "requiresConfirmation": false}]}
+
+User: "What genres do I have?"
+{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "genres", "limit": 5}, "description": "Analyze genres in collection", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`
+};
+
+// Optimized response formatting prompt (reduced from ~400 to ~200 tokens)
+const RESPONSE_TEMPLATE = `## Role
+Friendly vinyl collection assistant.
+
+## Task
+Convert results to natural responses.
+
+## Rules
+- Use exact names from results
+- Be conversational and helpful
+- Use HTML <ul> for lists
+- Match results accurately
+- For release year queries, provide the specific year: "Kids by The Midnight came out in 2018"
+- For album detail queries, focus on the specific information requested
+
+## Response Patterns
+- Found albums: "I found [X] albums: <ul><li>Album by Artist</li></ul>"
+- Album details: "The album [album] by [artist] came out in [year]"
+- Release year queries: "Kids by The Midnight came out in 2018"
+- No results: "No albums found matching '[query]'"
+- Add success: "Successfully added [album] by [artist]!"
+- Remove success: "Successfully removed [album] by [artist]"
+- Conditional: "I checked and you [already have/didn't have] [album] by [artist]"
+- Insights: "Here are insights: <ul><li>Insight 1</li><li>Insight 2</li></ul>"
+
+## Input
+User: "{QUERY}"
+Results: {RESULTS}
+
+{CONTEXT}
+
+## Response
+Provide a friendly, clear response that matches the results.`;
+
+// Tool definitions - Enhanced RAG Tools v1.3
 const TOOLS = {
+  // Core collection management with semantic search
   vinyl_collection_query: {
     name: 'vinyl_collection_query',
-    description: 'Query the user\'s vinyl collection for albums by artist, album name, or both',
+    description: 'Search and query the vinyl collection using semantic similarity with embeddings',
     inputSchema: {
       type: 'object',
       properties: {
-        albumName: { type: 'string', description: 'Album name to search for (optional)' },
-        artistName: { type: 'string', description: 'Artist name to search for (optional)' }
-      }
+        query: { type: 'string', description: 'Natural language search query (required)' },
+        searchType: { type: 'string', description: 'Type of search: album, artist, temporal, combined (default: combined)' },
+        limit: { type: 'number', description: 'Maximum number of results (default: 1000)' },
+        similarityThreshold: { type: 'number', description: 'Minimum similarity score (default: 0.7)' }
+      },
+      required: ['query']
     }
   },
+  
+  // Album management
   vinyl_add_album: {
     name: 'vinyl_add_album',
-    description: 'Add a new album to the user\'s vinyl collection',
+    description: 'Add a new album to the collection',
     inputSchema: {
       type: 'object',
       properties: {
         albumName: { type: 'string', description: 'Album name (required)' },
         artistName: { type: 'string', description: 'Artist name (required)' },
         releaseYear: { type: 'number', description: 'Release year (optional)' },
-        variant: { type: 'string', description: 'Album variant (optional)' },
-        purchaseDate: { type: 'string', description: 'Purchase date in YYYY-MM-DD format (optional)' },
-        acquiredDate: { type: 'string', description: 'Acquired date in YYYY-MM-DD format (optional)' },
-        preordered: { type: 'boolean', description: 'Whether the album was preordered (optional)' },
-        artworkUrl: { type: 'string', description: 'URL to album artwork (optional)' },
-        size: { type: 'number', description: 'Record size in inches (optional)' }
+        purchasedDate: { type: 'string', description: 'Purchase date in YYYY-MM-DD format (optional)' },
+        receivedDate: { type: 'string', description: 'Received date in YYYY-MM-DD format (optional)' }
       },
       required: ['albumName', 'artistName']
     }
   },
+  
   vinyl_remove_album: {
     name: 'vinyl_remove_album',
-    description: 'Remove an album from the user\'s vinyl collection',
+    description: 'Remove an album from the collection',
     inputSchema: {
       type: 'object',
       properties: {
-        albumId: { type: 'number', description: 'Album ID (optional)' },
-        albumName: { type: 'string', description: 'Album name (optional)' },
-        artistName: { type: 'string', description: 'Artist name (optional)' }
-      }
-    }
-  },
-  vinyl_collection_overview: {
-    name: 'vinyl_collection_overview',
-    description: 'Get a comprehensive overview of the entire vinyl collection including statistics and all albums',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        includeStats: { type: 'boolean', description: 'Include collection statistics (default: true)' },
-        limit: { type: 'number', description: 'Maximum number of albums to return (default: 100)' },
-        sortBy: { type: 'string', description: 'Sort by: acquired_date, title, artist, release_year (default: acquired_date)' }
-      }
-    }
-  },
-  vinyl_artist_catalog: {
-    name: 'vinyl_artist_catalog',
-    description: 'Get all albums by a specific artist with complete details',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        artistName: { type: 'string', description: 'Artist name to search for (required)' },
-        includeStats: { type: 'boolean', description: 'Include artist-specific statistics (default: true)' }
+        albumName: { type: 'string', description: 'Album name to remove (required)' },
+        artistName: { type: 'string', description: 'Artist name (required)' }
       },
-      required: ['artistName']
+      required: ['albumName', 'artistName']
     }
   },
-  vinyl_fuzzy_search: {
-    name: 'vinyl_fuzzy_search',
-    description: 'Search for albums with partial name matches (fuzzy search)',
+  
+  // Collection insights
+  vinyl_collection_insights: {
+    name: 'vinyl_collection_insights',
+    description: 'Get AI-generated insights about the collection using embeddings',
     inputSchema: {
       type: 'object',
       properties: {
-        searchTerm: { type: 'string', description: 'Search term to find in album titles (required)' },
-        limit: { type: 'number', description: 'Maximum number of results (default: 20)' }
-      },
-      required: ['searchTerm']
+        insightType: { type: 'string', description: 'Type of insight: genres, eras, themes, recommendations, temporal (default: genres)' },
+        limit: { type: 'number', description: 'Number of insights to generate (default: 5)' }
+      }
     }
   }
 };
 
-// Function to plan operations using GPT
+// Function to plan operations using GPT with optimized prompts
 async function planOperations(message: string, conversationContext?: string, previousResults?: any[]): Promise<Operation[]> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -136,7 +511,7 @@ async function planOperations(message: string, conversationContext?: string, pre
 
     // Validate inputs
     const validatedMessage = validateUserInput(message);
-    const validatedContext = validateConversationContext(conversationContext || '');
+    let validatedContext = validateConversationContext(conversationContext || '');
     
     if (!validatedMessage) {
       console.log('[chat-response] Empty or invalid message received');
@@ -147,147 +522,68 @@ async function planOperations(message: string, conversationContext?: string, pre
       apiKey: openaiApiKey,
     });
 
+    // Context optimization: summarize long contexts and check relevance
+    if (validatedContext.length > 1000) {
+      const relevance = calculateContextRelevance(validatedContext, validatedMessage);
+      console.log(`[OPTIMIZATION] Context relevance: ${relevance.toFixed(2)}, length: ${validatedContext.length}`);
+      
+      if (relevance < 0.3) {
+        // Low relevance context - summarize or truncate
+        console.log(`[OPTIMIZATION] Low relevance context (${relevance.toFixed(2)}), summarizing...`);
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      } else if (validatedContext.length > 1500) {
+        // High relevance but too long - summarize
+        console.log(`[OPTIMIZATION] Long context (${validatedContext.length} chars), summarizing...`);
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      }
+    }
+
+    // Select appropriate prompt template based on query type using AI
+    const promptType = await selectPromptTemplate(validatedMessage, validatedContext);
+    let template = PROMPT_TEMPLATES[promptType] || PROMPT_TEMPLATES.core;
+    console.log(`[OPTIMIZATION] Selected prompt template: ${promptType}`);
+
+    // Build dynamic sections
     const toolDescriptions = Object.values(TOOLS).map(tool => 
       `- "${tool.name}": ${tool.description}`
     ).join('\n');
 
-    // Build context sections
-    const contextSection = validatedContext ? `## Conversation Context
-${validatedContext}
-
-Use this context to understand references like "her new album" or "that artist" and maintain conversation continuity.` : '';
+    const contextSection = validatedContext ? `## Context
+${validatedContext}` : '';
 
     const previousResultsSection = previousResults && previousResults.length > 0 ? `## Previous Results
 ${previousResults.map((result, index) => 
-  `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${result.success ? 'SUCCESS' : 'FAILED'}
+  `${index + 1}. ${result.operation.description} - ${result.success ? 'SUCCESS' : 'FAILED'}
    ${result.success ? JSON.stringify(result.result, null, 2) : `Error: ${result.error}`}`
-).join('\n\n')}
+).join('\n\n')}` : '';
 
-Analyze these results and decide if the user's request has been satisfied or if additional operations are needed.` : '';
+    const reflectionAnalysis = previousResults && previousResults.length > 0 ? `
+## Reflection
+Analyze previous results and decide next steps:
+- If the last operation was a vinyl_collection_query that returned found: true, the search was successful and the request is satisfied. Return {"operations": []}.
+- If the last operation was a vinyl_collection_query that returned found: false, consider alternative search strategies.
+- "if I don't have X, add it": If found: false → plan add; if found: true → return empty
+- "do I have X": If found: true → return empty (query answered); if found: false → return empty (confirmed not found)
+- Direct "add X": Return empty (handled in first iteration)
 
-    // Build examples section
-    const examples = `## Examples
+IMPORTANT: If the last result shows found: true with albums, the search is complete. Return {"operations": []}.
 
-**Basic Queries:**
-User: "Do I have Dark Side of the Moon by Pink Floyd?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Dark Side of the Moon", "artistName": "Pink Floyd"}, "description": "Query collection for Dark Side of the Moon by Pink Floyd", "requiresConfirmation": false}]}
+Return {"operations": []} if satisfied, or plan next operation.` : '';
 
-User: "Do I have The Beatles?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"artistName": "The Beatles"}, "description": "Query collection for albums by The Beatles", "requiresConfirmation": false}]}
-
-**Add Operations:**
-User: "Add Abbey Road by The Beatles"
-{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles to collection", "requiresConfirmation": true}]}
-
-**Remove Operations:**
-User: "Remove my copy of Sgt Pepper"
-{"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Sgt Pepper"}, "description": "Remove Sgt Pepper from collection", "requiresConfirmation": true}]}
-
-**Conditional Logic:**
-User: "If I don't have Revolver, add it"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"albumName": "Revolver"}, "description": "Check if Revolver exists in collection", "requiresConfirmation": false}]}
-
-**Ambiguous Names:**
-User: "Do I have Prince?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"artistName": "Prince"}, "description": "Query collection for albums by Prince", "requiresConfirmation": false}]}
-
-**Empty Results:**
-User: "Do I have any albums?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {}, "description": "Query all albums in collection", "requiresConfirmation": false}]}
-
-**Collection Overview:**
-User: "Show me my entire collection"
-{"operations": [{"tool": "vinyl_collection_overview", "parameters": {"includeStats": true, "limit": 100, "sortBy": "acquired_date"}, "description": "Get comprehensive overview of entire vinyl collection", "requiresConfirmation": false}]}
-
-User: "Give me an overview of what I have"
-{"operations": [{"tool": "vinyl_collection_overview", "parameters": {"includeStats": true, "limit": 50, "sortBy": "title"}, "description": "Get overview of vinyl collection sorted by title", "requiresConfirmation": false}]}
-
-**Artist Catalog:**
-User: "Show me all my Beatles albums"
-{"operations": [{"tool": "vinyl_artist_catalog", "parameters": {"artistName": "The Beatles", "includeStats": true}, "description": "Get all albums by The Beatles with complete details", "requiresConfirmation": false}]}
-
-User: "What do I have by Prince?"
-{"operations": [{"tool": "vinyl_artist_catalog", "parameters": {"artistName": "Prince", "includeStats": true}, "description": "Get all albums by Prince with complete details", "requiresConfirmation": false}]}
-
-**Fuzzy Search:**
-User: "Find albums with 'brat' in the title"
-{"operations": [{"tool": "vinyl_fuzzy_search", "parameters": {"searchTerm": "brat", "limit": 20}, "description": "Search for albums with 'brat' in the title", "requiresConfirmation": false}]}
-
-User: "Search for 'dark' albums"
-{"operations": [{"tool": "vinyl_fuzzy_search", "parameters": {"searchTerm": "dark", "limit": 20}, "description": "Search for albums with 'dark' in the title", "requiresConfirmation": false}]}`;
-
-    const systemPrompt = `## Role
-You are an intelligent planning assistant for vinyl collection management. You excel at reasoning, understanding context, and creating sophisticated operation plans.
-
-## Task
-Analyze user requests and create operation plans using available tools.
-
-## Output Format
-**CRITICAL**: Return ONLY valid JSON with this structure:
-{
-  "operations": [
-    {
-      "tool": "tool_name",
-      "parameters": { "param1": "value1" },
-      "description": "Human-readable description",
-      "requiresConfirmation": true/false
-    }
-  ]
-}
-
-## Rules
-- **JSON only**: No explanatory text, reasoning, or natural language
-- **Confirmation required**: Add/remove operations must set requiresConfirmation: true
-- **Conditional logic**: Support "if I don't have X, add it" patterns
-- **Artist vs album detection**: Distinguish between artist names and album titles
-- **Iterative planning**: Break complex requests into logical steps
-
-## Available Tools
-${toolDescriptions}
-
-## Planning Patterns
-
-**Conditional Operations:**
-- "if I don't have X, add it": First query, then add if not found
-- "if I have X, remove it": First query, then remove if found
-- "do I have X": Query only, then return empty operations
-
-**Artist vs Album Detection:**
-- Artist indicators: single names, band names, known artists
-- Album indicators: longer titles, "album", "record", "LP" keywords
-- When uncertain: prefer artist search first
-- For ambiguous cases: plan both artist and album searches
-
-${examples}
-
-${contextSection}
-
-${previousResultsSection}
-
-## Current Request
-"${validatedMessage}"
-
-${previousResults && previousResults.length > 0 ? `
-## Reflection Analysis
-Analyze the previous results and original request to decide next steps:
-
-- **"if I don't have X, add it"**: If found: false → plan add operation; if found: true → return empty operations
-- **"do I have X"**: Return empty operations (query answered the question)
-- **Direct "add X"**: Return empty operations (should have been handled in first iteration)
-
-**Decision**: Return empty operations array (request satisfied) or plan the next operation needed.
-
-**Valid responses:**
-{"operations": []}  // no more operations needed
-{"operations": [{"tool": "vinyl_add_album", "parameters": {...}, "description": "...", "requiresConfirmation": true}]}  // plan next operation` : ''}
-
-Return only the JSON object with the operations array.`;
+    // Replace template placeholders
+    template = template
+      .replace('{TOOLS}', toolDescriptions)
+      .replace('{CONTEXT}', contextSection)
+      .replace('{PREVIOUS_RESULTS}', previousResultsSection)
+      .replace('{QUERY}', validatedMessage)
+      .replace('{REFLECTION_ANALYSIS}', reflectionAnalysis);
 
     const messages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: template }
     ];
 
-    if (validatedContext) {
+    // Add conversation context as user messages (if not already summarized)
+    if (validatedContext && !validatedContext.includes('## Context')) {
       const contextLines = validatedContext.split('\n').filter(line => line.trim());
       for (const line of contextLines) {
         if (line.startsWith('User: ')) {
@@ -304,8 +600,10 @@ Return only the JSON object with the operations array.`;
       model: 'gpt-4o-mini',
       messages,
       temperature: 0.1,
-      max_tokens: 800
+      max_tokens: 600 // Reduced from 800 due to shorter prompts
     });
+
+    console.log(`[OPTIMIZATION] Planning prompt tokens: ~${Math.ceil(template.length / 4)}`);
 
     const content = completion.choices[0]?.message?.content;
     
@@ -320,6 +618,17 @@ Return only the JSON object with the operations array.`;
       
       if (parsed.operations && Array.isArray(parsed.operations)) {
         console.log(`[chat-response] Planned ${parsed.operations.length} operations:`, parsed.operations.map(op => op.description));
+        
+        // Log if this is a repeat of a previous operation
+        if (previousResults && previousResults.length > 0) {
+          const lastResult = previousResults[previousResults.length - 1];
+          if (parsed.operations.length === 1 && 
+              parsed.operations[0].tool === lastResult.operation.tool &&
+              JSON.stringify(parsed.operations[0].parameters) === JSON.stringify(lastResult.operation.parameters)) {
+            console.log(`[AGENT] Detected duplicate operation planning`);
+          }
+        }
+        
         return parsed.operations;
       }
 
@@ -339,52 +648,249 @@ Return only the JSON object with the operations array.`;
 }
 
 // Direct tool execution functions
-async function executeVinylCollectionQuery(params: any, supabase: any): Promise<any> {
-  const { albumName, artistName } = params;
+async function executeVinylCollectionQuery(params: any, supabase: any, authHeader: string): Promise<any> {
+  const { query, searchType = 'combined', limit = 1000, similarityThreshold = 0.7 } = params;
   
   console.log('[chat-response] Executing vinyl_collection_query with params:', params);
   
-  let query = supabase.from('album').select(`
-    id,
-    title,
-    artist_id,
-    variant,
-    purchase_date,
-    acquired_date,
-    preordered,
-    artwork_url,
-    release_year,
-    size
-  `);
+  if (!query) {
+    throw new Error('Query parameter is required');
+  }
 
-  if (artistName) {
-    const { data: artists, error: artistError } = await supabase
-      .from('artist')
-      .select('id, name')
-      .ilike('name', `%${artistName}%`);
+  // Check for "all albums" queries that need direct database access
+  if (query.toLowerCase().includes('all albums') || query.toLowerCase().includes('how many') || query.toLowerCase().includes('what\'s in my collection')) {
+    console.log('[chat-response] Detected collection overview query, using direct database query');
+    return await handleCollectionOverviewQuery(query, supabase, limit);
+  }
 
-    if (artistError) {
-      throw artistError;
+  // Check for temporal queries that need special handling
+  const temporalKeywords = ['oldest', 'newest', 'earliest', 'latest', 'first', 'last', 'recent', 'vintage', 'classic'];
+  const isTemporalQuery = temporalKeywords.some(keyword => 
+    query.toLowerCase().includes(keyword)
+  );
+
+  if (isTemporalQuery || searchType === 'temporal') {
+    console.log('[chat-response] Detected temporal query, using direct database query');
+    return await handleTemporalQuery(query, supabase, limit);
+  }
+
+  try {
+    // Call the semantic-search function with user authentication
+    const semanticSearchUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/semantic-search`;
+    const response = await fetch(semanticSearchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        query,
+        searchType,
+        limit,
+        similarityThreshold
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Semantic search error:', errorText);
+      throw new Error(`Semantic search failed: ${response.status}`);
     }
 
-    if (!artists || artists.length === 0) {
+    const searchResult = await response.json();
+    
+    if (!searchResult.success) {
+      throw new Error(searchResult.error || 'Semantic search failed');
+    }
+
+    const results = searchResult.results || [];
+
+    if (results.length === 0) {
+      // Try fallback search types if initial search fails
+      console.log(`[chat-response] No results with searchType: ${searchType}, trying fallback searches`);
+      
+      const fallbackSearchTypes = searchType === 'artist' ? ['combined', 'album'] : 
+                                 searchType === 'album' ? ['combined', 'artist'] : 
+                                 searchType === 'combined' ? ['artist', 'album'] : ['combined'];
+      
+      for (const fallbackType of fallbackSearchTypes) {
+        try {
+          console.log(`[chat-response] Trying fallback search with searchType: ${fallbackType}`);
+          
+          const fallbackResponse = await fetch(semanticSearchUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+            },
+            body: JSON.stringify({
+              query,
+              searchType: fallbackType,
+              limit,
+              similarityThreshold: 0.5 // Lower threshold for fallback
+            })
+          });
+
+          if (fallbackResponse.ok) {
+            const fallbackResult = await fallbackResponse.json();
+            if (fallbackResult.success && fallbackResult.results && fallbackResult.results.length > 0) {
+              console.log(`[chat-response] Found ${fallbackResult.results.length} results with fallback searchType: ${fallbackType}`);
+              
+              const formattedResults = fallbackResult.results.map((result: any) => ({
+                id: result.album_id,
+                title: result.title,
+                artist_name: result.artist_name,
+                release_year: result.release_year,
+                purchase_date: result.purchase_date,
+                acquired_date: result.received_date || result.acquired_date,
+                similarity: result.similarity
+              }));
+
+              const message = fallbackResult.results.length === 1 
+                ? `Found 1 album: "${fallbackResult.results[0].title}" by ${fallbackResult.results[0].artist_name} (similarity: ${(fallbackResult.results[0].similarity * 100).toFixed(1)}%)`
+                : `Found ${fallbackResult.results.length} albums matching "${query}": ${fallbackResult.results.map((a: any) => `"${a.title}" by ${a.artist_name}`).join(', ')}`;
+
+              return {
+                found: true,
+                message,
+                albums: formattedResults,
+                query,
+                searchType: fallbackType,
+                similarityThreshold: 0.5,
+                totalResults: fallbackResult.results.length,
+                fallbackUsed: true
+              };
+            }
+          }
+        } catch (fallbackError) {
+          console.error(`[chat-response] Fallback search with ${fallbackType} failed:`, fallbackError);
+        }
+      }
+      
       return {
         found: false,
-        message: `No artist found matching "${artistName}"`,
-        albumName: albumName || null,
-        artistName
+        message: `No albums found matching "${query}"`,
+        query,
+        searchType,
+        albums: []
       };
     }
 
-    const artistIds = artists.map(artist => artist.id);
-    query = query.in('artist_id', artistIds);
-  }
+    // Format results to match expected structure
+    const formattedResults = results.map((result: any) => ({
+      id: result.album_id,
+      title: result.title,
+      artist_name: result.artist_name,
+      release_year: result.release_year,
+      purchase_date: result.purchase_date,
+      acquired_date: result.received_date || result.acquired_date,
+      similarity: result.similarity
+    }));
 
-  if (albumName) {
-    query = query.ilike('title', `%${albumName}%`);
-  }
+    const message = results.length === 1 
+      ? `Found 1 album: "${results[0].title}" by ${results[0].artist_name} (similarity: ${(results[0].similarity * 100).toFixed(1)}%)`
+      : `Found ${results.length} albums matching "${query}": ${results.map((a: any) => `"${a.title}" by ${a.artist_name}`).join(', ')}`;
 
-  const { data: albums, error: albumError } = await query;
+    return {
+      found: true,
+      message,
+      albums: formattedResults,
+      query,
+      searchType,
+      similarityThreshold,
+      totalResults: results.length
+    };
+
+  } catch (error) {
+    console.error('Error in executeVinylCollectionQuery:', error);
+    
+    // Fallback to traditional search if semantic search fails
+    console.log('[chat-response] Falling back to traditional search');
+    
+    // Extract potential album/artist names from query for fallback
+    const words = query.split(' ').filter(word => word.length > 2);
+    const potentialAlbumName = words.slice(0, 2).join(' ');
+    const potentialArtistName = words.slice(-2).join(' ');
+    
+    let fallbackQuery = supabase.from('album').select(`
+      id,
+      title,
+      artist_id,
+      release_year,
+      purchase_date,
+      acquired_date
+    `);
+
+    // Try to find matches
+    fallbackQuery = fallbackQuery.or(`title.ilike.%${potentialAlbumName}%,title.ilike.%${potentialArtistName}%`);
+    
+    const { data: albums, error: albumError } = await fallbackQuery.limit(limit);
+
+    if (albumError) {
+      throw albumError;
+    }
+
+    if (!albums || albums.length === 0) {
+      return {
+        found: false,
+        message: `No albums found matching "${query}" (semantic search unavailable)`,
+        query,
+        searchType,
+        albums: [],
+        fallbackUsed: true
+      };
+    }
+
+    // Get artist names
+    const results = await Promise.all(albums.map(async (album) => {
+      const { data: artist, error: artistError } = await supabase
+        .from('artist')
+        .select('name')
+        .eq('id', album.artist_id)
+        .single();
+
+      if (artistError) {
+        return {
+          ...album,
+          artist_name: 'Unknown Artist'
+        };
+      }
+
+      return {
+        ...album,
+        artist_name: artist.name
+      };
+    }));
+
+    return {
+      found: true,
+      message: `Found ${results.length} albums (fallback search): ${results.map(a => `"${a.title}" by ${a.artist_name}`).join(', ')}`,
+      albums: results,
+      query,
+      searchType,
+      fallbackUsed: true,
+      totalResults: results.length
+    };
+  }
+}
+
+// Helper function to handle temporal queries directly
+async function handleTemporalQuery(query: string, supabase: any, limit: number): Promise<any> {
+  const queryLower = query.toLowerCase();
+  
+  // Get all albums with release years
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select(`
+      id,
+      title,
+      artist_id,
+      release_year,
+      purchase_date,
+      acquired_date
+    `)
+    .not('release_year', 'is', null)
+    .order('release_year', { ascending: true });
 
   if (albumError) {
     throw albumError;
@@ -393,12 +899,14 @@ async function executeVinylCollectionQuery(params: any, supabase: any): Promise<
   if (!albums || albums.length === 0) {
     return {
       found: false,
-      message: `No albums found matching your search`,
-      albumName: albumName || null,
-      artistName: artistName || null
+      message: 'No albums with release year information found in your collection',
+      query,
+      searchType: 'temporal',
+      albums: []
     };
   }
 
+  // Get artist names
   const results = await Promise.all(albums.map(async (album) => {
     const { data: artist, error: artistError } = await supabase
       .from('artist')
@@ -407,7 +915,6 @@ async function executeVinylCollectionQuery(params: any, supabase: any): Promise<
       .single();
 
     if (artistError) {
-      console.error('Error fetching artist name:', artistError);
       return {
         ...album,
         artist_name: 'Unknown Artist'
@@ -420,23 +927,187 @@ async function executeVinylCollectionQuery(params: any, supabase: any): Promise<
     };
   }));
 
-  const message = results.length === 1 
-    ? `Found 1 album: "${results[0].title}" by ${results[0].artist_name}`
-    : `Found ${results.length} albums: ${results.map(a => `"${a.title}" by ${a.artist_name}`).join(', ')}`;
+  let filteredResults = results;
+  let message = '';
+
+  // Extract year from query if present
+  const yearMatch = query.match(/\b(19|20)\d{2}\b/);
+  const specificYear = yearMatch ? parseInt(yearMatch[0]) : null;
+
+  // Apply temporal filtering based on query
+  if (specificYear) {
+    // Specific year query
+    filteredResults = results.filter(a => a.release_year === specificYear);
+    message = `Your album${filteredResults.length !== 1 ? 's' : ''} from ${specificYear}:`;
+  } else if (queryLower.includes('oldest') || queryLower.includes('earliest')) {
+    const oldestYear = Math.min(...results.map(a => a.release_year));
+    filteredResults = results.filter(a => a.release_year === oldestYear);
+    message = `Your oldest album${filteredResults.length > 1 ? 's' : ''} from ${oldestYear}:`;
+  } else if (queryLower.includes('newest') || queryLower.includes('latest')) {
+    const newestYear = Math.max(...results.map(a => a.release_year));
+    filteredResults = results.filter(a => a.release_year === newestYear);
+    message = `Your newest album${filteredResults.length > 1 ? 's' : ''} from ${newestYear}:`;
+  } else if (queryLower.includes('recent')) {
+    const currentYear = new Date().getFullYear();
+    const recentThreshold = currentYear - 10;
+    filteredResults = results.filter(a => a.release_year >= recentThreshold);
+    message = `Your recent albums (${recentThreshold}-${currentYear}):`;
+  } else if (queryLower.includes('vintage') || queryLower.includes('classic')) {
+    const vintageThreshold = 1980;
+    filteredResults = results.filter(a => a.release_year <= vintageThreshold);
+    message = `Your vintage/classic albums (pre-${vintageThreshold + 1}):`;
+  } else if (queryLower.includes('70s') || queryLower.includes('1970s')) {
+    filteredResults = results.filter(a => a.release_year >= 1970 && a.release_year <= 1979);
+    message = `Your albums from the 1970s:`;
+  } else if (queryLower.includes('80s') || queryLower.includes('1980s')) {
+    filteredResults = results.filter(a => a.release_year >= 1980 && a.release_year <= 1989);
+    message = `Your albums from the 1980s:`;
+  } else if (queryLower.includes('90s') || queryLower.includes('1990s')) {
+    filteredResults = results.filter(a => a.release_year >= 1990 && a.release_year <= 1999);
+    message = `Your albums from the 1990s:`;
+  } else if (queryLower.includes('2000s') || queryLower.includes('00s')) {
+    filteredResults = results.filter(a => a.release_year >= 2000 && a.release_year <= 2009);
+    message = `Your albums from the 2000s:`;
+  } else if (queryLower.includes('2010s') || queryLower.includes('10s')) {
+    filteredResults = results.filter(a => a.release_year >= 2010 && a.release_year <= 2019);
+    message = `Your albums from the 2010s:`;
+  } else if (queryLower.includes('2020s') || queryLower.includes('20s')) {
+    filteredResults = results.filter(a => a.release_year >= 2020);
+    message = `Your albums from the 2020s:`;
+  } else {
+    // Default: return all albums sorted by release year
+    filteredResults = results.slice(0, limit);
+    message = `Your albums sorted by release year:`;
+  }
+
+  if (filteredResults.length === 0) {
+    return {
+      found: false,
+      message: `No albums match your temporal query: "${query}"`,
+      query,
+      searchType: 'temporal',
+      albums: []
+    };
+  }
+
+  // Limit results
+  filteredResults = filteredResults.slice(0, limit);
 
   return {
     found: true,
-    message,
+    message: `${message} ${filteredResults.map(a => `"${a.title}" by ${a.artist_name} (${a.release_year})`).join(', ')}`,
+    albums: filteredResults,
+    query,
+    searchType: 'temporal',
+    totalResults: filteredResults.length,
+    temporalQuery: true
+  };
+}
+
+// Helper function to handle collection overview queries directly
+async function handleCollectionOverviewQuery(query: string, supabase: any, limit: number): Promise<any> {
+  const queryLower = query.toLowerCase();
+  
+  // Get total count of albums
+  const { count: totalAlbums, error: countError } = await supabase
+    .from('album')
+    .select('*', { count: 'exact', head: true });
+
+  if (countError) {
+    throw countError;
+  }
+
+  // Get total count of artists
+  const { count: totalArtists, error: artistCountError } = await supabase
+    .from('artist')
+    .select('*', { count: 'exact', head: true });
+
+  if (artistCountError) {
+    throw artistCountError;
+  }
+
+  // If it's just a count query, return the count
+  if (queryLower.includes('how many')) {
+    return {
+      found: true,
+      message: `You have ${totalAlbums || 0} albums by ${totalArtists || 0} different artists in your collection.`,
+      query,
+      searchType: 'overview',
+      totalResults: totalAlbums || 0,
+      totalArtists: totalArtists || 0,
+      isCountQuery: true
+    };
+  }
+
+  // For overview queries, get some sample albums
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select(`
+      id,
+      title,
+      artist_id,
+      release_year,
+      purchase_date,
+      acquired_date
+    `)
+    .order('acquired_date', { ascending: false })
+    .limit(limit);
+
+  if (albumError) {
+    throw albumError;
+  }
+
+  if (!albums || albums.length === 0) {
+    return {
+      found: false,
+      message: 'Your collection is empty. Start adding albums to get started!',
+      query,
+      searchType: 'overview',
+      albums: [],
+      totalResults: 0,
+      totalArtists: 0
+    };
+  }
+
+  // Get artist names
+  const results = await Promise.all(albums.map(async (album) => {
+    const { data: artist, error: artistError } = await supabase
+      .from('artist')
+      .select('name')
+      .eq('id', album.artist_id)
+      .single();
+
+    if (artistError) {
+      return {
+        ...album,
+        artist_name: 'Unknown Artist'
+      };
+    }
+
+    return {
+      ...album,
+      artist_name: artist.name
+    };
+  }));
+
+  const message = `Your collection contains ${totalAlbums} albums by ${totalArtists} artists. Here are your ${results.length} most recent additions:`;
+
+  return {
+    found: true,
+    message: `${message} ${results.map(a => `"${a.title}" by ${a.artist_name}`).join(', ')}`,
     albums: results,
-    albumName: albumName || null,
-    artistName: artistName || null
+    query,
+    searchType: 'overview',
+    totalResults: totalAlbums || 0,
+    totalArtists: totalArtists || 0,
+    overviewQuery: true
   };
 }
 
 async function executeVinylAddAlbum(params: any, supabase: any): Promise<any> {
   console.log('[chat-response] Executing vinyl_add_album with params:', params);
   
-  const { albumName, artistName, releaseYear, variant, purchaseDate, acquiredDate, preordered, artworkUrl, size } = params;
+  const { albumName, artistName, releaseYear, purchasedDate, receivedDate } = params;
   
   if (!albumName || !artistName) {
     throw new Error('Both albumName and artistName are required');
@@ -476,12 +1147,8 @@ async function executeVinylAddAlbum(params: any, supabase: any): Promise<any> {
     title: albumName,
     artist_id: artistId,
     release_year: releaseYear || null,
-    variant: variant || null,
-    purchase_date: purchaseDate || null,
-    acquired_date: acquiredDate || new Date().toISOString().split('T')[0],
-    preordered: preordered || false,
-    artwork_url: artworkUrl || null,
-    size: size || 12
+    purchase_date: purchasedDate || null,
+    acquired_date: receivedDate || new Date().toISOString().split('T')[0]
   };
 
   const { data: newAlbum, error: albumCreateError } = await supabase
@@ -491,13 +1158,9 @@ async function executeVinylAddAlbum(params: any, supabase: any): Promise<any> {
       id,
       title,
       artist_id,
-      variant,
-      purchase_date,
-      acquired_date,
-      preordered,
-      artwork_url,
       release_year,
-      size
+      purchase_date,
+      acquired_date
     `)
     .single();
 
@@ -528,59 +1191,40 @@ async function executeVinylAddAlbum(params: any, supabase: any): Promise<any> {
 async function executeVinylRemoveAlbum(params: any, supabase: any): Promise<any> {
   console.log('[chat-response] Executing vinyl_remove_album with params:', params);
   
-  const { albumId, albumName, artistName } = params;
+  const { albumName, artistName } = params;
 
-  if (!albumId && !albumName) {
-    throw new Error('Provide albumId or albumName (artistName is optional).');
+  if (!albumName || !artistName) {
+    throw new Error('Both albumName and artistName are required');
   }
 
-  let album;
-  if (albumId) {
-    const { data, error } = await supabase
-      .from('album')
-      .select('id, title, artist_id')
-      .eq('id', albumId)
-      .single();
-    
-    if (error || !data) {
-      throw new Error(`No album found with id ${albumId}`);
-    }
-    album = data;
-  } else {
-    let query = supabase
-      .from('album')
-      .select('id, title, artist_id, artist(name)')
-      .ilike('title', albumName);
-    
-    if (artistName) {
-      const { data: artists, error: artistError } = await supabase
-        .from('artist')
-        .select('id')
-        .ilike('name', artistName);
-      
-      if (artistError || !artists?.length) {
-        throw new Error(`No artist found matching "${artistName}"`);
-      }
-      const artistId = artists[0].id;
-      query = query.eq('artist_id', artistId);
-    }
-    
-    const { data: albums, error: albumError } = await query;
-    
-    if (albumError || !albums?.length) {
-      const errorMessage = artistName 
-        ? `No album found with title "${albumName}" for artist "${artistName}"`
-        : `No album found with title "${albumName}"`;
-      throw new Error(errorMessage);
-    }
-    
-    if (albums.length > 1 && !artistName) {
-      const albumOptions = albums.map(a => `"${a.title}" by ${a.artist?.name || 'Unknown Artist'}`).join(', ');
-      throw new Error(`Multiple albums found with title "${albumName}". Please specify the artist. Options: ${albumOptions}`);
-    }
-    
-    album = albums[0];
+  // Find the album by name and artist
+  const { data: artists, error: artistError } = await supabase
+    .from('artist')
+    .select('id')
+    .ilike('name', artistName);
+  
+  if (artistError || !artists?.length) {
+    throw new Error(`No artist found matching "${artistName}"`);
   }
+  
+  const artistId = artists[0].id;
+  
+  const { data: albums, error: albumError } = await supabase
+    .from('album')
+    .select('id, title, artist_id')
+    .ilike('title', albumName)
+    .eq('artist_id', artistId);
+  
+  if (albumError || !albums?.length) {
+    throw new Error(`No album found with title "${albumName}" by "${artistName}"`);
+  }
+  
+  if (albums.length > 1) {
+    const albumOptions = albums.map(a => `"${a.title}"`).join(', ');
+    throw new Error(`Multiple albums found with title "${albumName}" by "${artistName}". Please be more specific. Options: ${albumOptions}`);
+  }
+  
+  const album = albums[0];
 
   // Delete related entries first
   const { data: relatedEntries, error: entriesError } = await supabase
@@ -633,296 +1277,159 @@ async function executeVinylRemoveAlbum(params: any, supabase: any): Promise<any>
   };
 }
 
-async function executeVinylCollectionOverview(params: any, supabase: any): Promise<any> {
-  console.log('[chat-response] Executing vinyl_collection_overview with params:', params);
+async function executeVinylCollectionInsights(params: any, supabase: any, authHeader: string): Promise<any> {
+  console.log('[chat-response] Executing vinyl_collection_insights with params:', params);
   
-  const { includeStats = true, limit = 100, sortBy = 'acquired_date' } = params;
-  
-  // Build the query
-  let query = supabase.from('album').select(`
-    id,
-    title,
-    artist_id,
-    variant,
-    purchase_date,
-    acquired_date,
-    preordered,
-    artwork_url,
-    release_year,
-    size
-  `);
-  
-  // Apply sorting
-  switch (sortBy) {
-    case 'title':
-      query = query.order('title', { ascending: true });
-      break;
-    case 'artist':
-      query = query.order('artist_id', { ascending: true });
-      break;
-    case 'release_year':
-      query = query.order('release_year', { ascending: true });
-      break;
-    case 'acquired_date':
-    default:
-      query = query.order('acquired_date', { ascending: false });
-      break;
-  }
-  
-  // Apply limit
-  query = query.limit(limit);
-  
-  const { data: albums, error: albumError } = await query;
-  
-  if (albumError) {
-    throw albumError;
-  }
-  
-  // Get artist names for all albums
-  const results = await Promise.all(albums.map(async (album) => {
-    const { data: artist, error: artistError } = await supabase
-      .from('artist')
-      .select('name')
-      .eq('id', album.artist_id)
-      .single();
+  const { insightType = 'genres', limit = 5 } = params;
 
-    if (artistError) {
-      console.error('Error fetching artist name:', artistError);
+  try {
+    // Call the collection-insights function
+    const insightsUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/collection-insights`;
+    const response = await fetch(insightsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        insightType,
+        limit
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Collection insights error:', errorText);
+      throw new Error(`Collection insights failed: ${response.status}`);
+    }
+
+    const insightsResult = await response.json();
+    
+    if (!insightsResult.success) {
+      throw new Error(insightsResult.error || 'Collection insights failed');
+    }
+
+    const insights = insightsResult.insights || [];
+
+    if (insights.length === 0) {
       return {
-        ...album,
-        artist_name: 'Unknown Artist'
+        success: false,
+        message: `No insights generated for ${insightType}`,
+        insightType,
+        insights: []
       };
     }
 
     return {
-      ...album,
-      artist_name: artist.name
+      success: true,
+      message: `Generated ${insights.length} insights about your collection`,
+      insightType,
+      insights,
+      limit,
+      generatedAt: insightsResult.generatedAt
     };
-  }));
-  
-  let stats = null;
-  
-  if (includeStats) {
-    // Get collection statistics
-    const { count: totalAlbums, error: countError } = await supabase
-      .from('album')
-      .select('*', { count: 'exact', head: true });
+
+  } catch (error) {
+    console.error('Error in executeVinylCollectionInsights:', error);
     
-    if (countError) {
-      console.error('Error getting total album count:', countError);
-    } else {
-      // Get artist count
-      const { count: totalArtists, error: artistCountError } = await supabase
-        .from('artist')
-        .select('*', { count: 'exact', head: true });
-      
-      if (artistCountError) {
-        console.error('Error getting total artist count:', artistCountError);
-      } else {
-        // Get recent acquisitions (last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
-        const { count: recentAlbums, error: recentError } = await supabase
-          .from('album')
-          .select('*', { count: 'exact', head: true })
-          .gte('acquired_date', thirtyDaysAgo.toISOString().split('T')[0]);
-        
-        if (recentError) {
-          console.error('Error getting recent albums count:', recentError);
-        } else {
-          stats = {
-            totalAlbums,
-            totalArtists,
-            recentAlbums: recentAlbums || 0,
-            oldestAlbum: results.length > 0 ? Math.min(...results.filter(a => a.release_year).map(a => a.release_year)) : null,
-            newestAlbum: results.length > 0 ? Math.max(...results.filter(a => a.release_year).map(a => a.release_year)) : null
-          };
-        }
+    // Fallback to basic collection analysis
+    console.log('[chat-response] Falling back to basic collection analysis');
+    
+    try {
+      // Get basic collection data for fallback analysis
+      const { data: albums, error: albumsError } = await supabase
+        .from('album')
+        .select(`
+          title,
+          release_year,
+          purchase_date,
+          acquired_date,
+          artist:artist_id(name)
+        `)
+        .order('acquired_date', { ascending: false })
+        .limit(50);
+
+      if (albumsError) {
+        throw albumsError;
       }
-    }
-  }
-  
-  return {
-    success: true,
-    message: `Found ${results.length} albums in your collection${limit < results.length ? ` (showing first ${limit})` : ''}`,
-    albums: results,
-    stats,
-    totalCount: results.length,
-    sortBy,
-    limit
-  };
-}
 
-async function executeVinylArtistCatalog(params: any, supabase: any): Promise<any> {
-  console.log('[chat-response] Executing vinyl_artist_catalog with params:', params);
-  
-  const { artistName, includeStats = true } = params;
-  
-  if (!artistName) {
-    throw new Error('Artist name is required');
-  }
-  
-  // Find the artist
-  const { data: artists, error: artistError } = await supabase
-    .from('artist')
-    .select('id, name')
-    .ilike('name', `%${artistName}%`);
+      if (!albums || albums.length === 0) {
+        return {
+          success: false,
+          message: 'Your collection is empty. Start adding albums to get insights!',
+          insightType,
+          insights: []
+        };
+      }
 
-  if (artistError) {
-    throw artistError;
-  }
+      // Generate basic fallback insights
+      const fallbackInsights = [];
+      
+      // Basic stats insight
+      const totalAlbums = albums.length;
+      const artists = [...new Set(albums.map(a => a.artist.name))];
+      const totalArtists = artists.length;
+      
+      fallbackInsights.push({
+        type: 'basic_stats',
+        title: 'Collection Overview',
+        description: `You have ${totalAlbums} albums by ${totalArtists} different artists in your collection.`,
+        confidence: 1.0
+      });
 
-  if (!artists || artists.length === 0) {
-    return {
-      success: false,
-      message: `No artist found matching "${artistName}"`,
-      artistName,
-      albums: [],
-      stats: null
-    };
-  }
+      // Recent acquisitions insight
+      const recentAlbums = albums.filter(a => a.acquired_date && 
+        new Date(a.acquired_date) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      
+      if (recentAlbums.length > 0) {
+        fallbackInsights.push({
+          type: 'recent_acquisitions',
+          title: 'Recent Additions',
+          description: `You've added ${recentAlbums.length} albums in the last 30 days, including "${recentAlbums[0].title}" by ${recentAlbums[0].artist.name}.`,
+          confidence: 0.9
+        });
+      }
 
-  // If multiple artists found, use the first one
-  const artist = artists[0];
-  
-  // Get all albums by this artist
-  const { data: albums, error: albumError } = await supabase
-    .from('album')
-    .select(`
-      id,
-      title,
-      artist_id,
-      variant,
-      purchase_date,
-      acquired_date,
-      preordered,
-      artwork_url,
-      release_year,
-      size
-    `)
-    .eq('artist_id', artist.id)
-    .order('release_year', { ascending: true });
+      // Release year range insight
+      const releaseYears = albums.filter(a => a.release_year).map(a => a.release_year);
+      if (releaseYears.length > 0) {
+        const minYear = Math.min(...releaseYears);
+        const maxYear = Math.max(...releaseYears);
+        fallbackInsights.push({
+          type: 'era_span',
+          title: 'Era Coverage',
+          description: `Your collection spans from ${minYear} to ${maxYear}, covering ${maxYear - minYear + 1} years of music history.`,
+          confidence: 0.8
+        });
+      }
 
-  if (albumError) {
-    throw albumError;
-  }
-
-  const results = albums.map(album => ({
-    ...album,
-    artist_name: artist.name
-  }));
-  
-  let stats = null;
-  
-  if (includeStats && results.length > 0) {
-    // Calculate artist-specific statistics
-    const releaseYears = results.filter(a => a.release_year).map(a => a.release_year);
-    const acquiredDates = results.filter(a => a.acquired_date).map(a => a.acquired_date);
-    
-    stats = {
-      totalAlbums: results.length,
-      earliestRelease: releaseYears.length > 0 ? Math.min(...releaseYears) : null,
-      latestRelease: releaseYears.length > 0 ? Math.max(...releaseYears) : null,
-      firstAcquired: acquiredDates.length > 0 ? acquiredDates.sort()[0] : null,
-      lastAcquired: acquiredDates.length > 0 ? acquiredDates.sort().reverse()[0] : null,
-      preorderedCount: results.filter(a => a.preordered).length,
-      averageReleaseYear: releaseYears.length > 0 ? Math.round(releaseYears.reduce((a, b) => a + b, 0) / releaseYears.length) : null
-    };
-  }
-  
-  return {
-    success: true,
-    message: `Found ${results.length} albums by ${artist.name} in your collection`,
-    artist: {
-      id: artist.id,
-      name: artist.name
-    },
-    albums: results,
-    stats
-  };
-}
-
-async function executeVinylFuzzySearch(params: any, supabase: any): Promise<any> {
-  console.log('[chat-response] Executing vinyl_fuzzy_search with params:', params);
-  
-  const { searchTerm, limit = 20 } = params;
-  
-  if (!searchTerm) {
-    throw new Error('Search term is required');
-  }
-  
-  // Search for albums with partial name matches
-  const { data: albums, error: albumError } = await supabase
-    .from('album')
-    .select(`
-      id,
-      title,
-      artist_id,
-      variant,
-      purchase_date,
-      acquired_date,
-      preordered,
-      artwork_url,
-      release_year,
-      size
-    `)
-    .ilike('title', `%${searchTerm}%`)
-    .order('title', { ascending: true })
-    .limit(limit);
-
-  if (albumError) {
-    throw albumError;
-  }
-
-  if (!albums || albums.length === 0) {
-    return {
-      success: false,
-      message: `No albums found containing "${searchTerm}" in the title`,
-      searchTerm,
-      albums: [],
-      totalResults: 0
-    };
-  }
-
-  // Get artist names for all albums
-  const results = await Promise.all(albums.map(async (album) => {
-    const { data: artist, error: artistError } = await supabase
-      .from('artist')
-      .select('name')
-      .eq('id', album.artist_id)
-      .single();
-
-    if (artistError) {
-      console.error('Error fetching artist name:', artistError);
       return {
-        ...album,
-        artist_name: 'Unknown Artist'
+        success: true,
+        message: `Generated ${fallbackInsights.length} basic insights about your collection`,
+        insightType,
+        insights: fallbackInsights.slice(0, limit),
+        limit,
+        fallbackUsed: true
       };
-    }
 
-    return {
-      ...album,
-      artist_name: artist.name
-    };
-  }));
-  
-  return {
-    success: true,
-    message: `Found ${results.length} albums containing "${searchTerm}" in the title`,
-    searchTerm,
-    albums: results,
-    totalResults: results.length,
-    limit
-  };
+    } catch (fallbackError) {
+      console.error('Fallback analysis also failed:', fallbackError);
+      throw new Error('Unable to generate collection insights');
+    }
+  }
 }
+
+
+
+
 
 
 // Function to execute operations with reflection and planning
 async function executeOperationsWithReflection(
   userMessage: string, 
   conversationContext: string, 
-  supabase: any
+  supabase: any,
+  authHeader: string
 ): Promise<{results: ExecutionResult[], requiresConfirmation: boolean, confirmationOperations: Operation[]}> {
   const results: ExecutionResult[] = [];
   let iteration = 0;
@@ -935,8 +1442,25 @@ async function executeOperationsWithReflection(
     const operations = await planOperations(userMessage, conversationContext, results);
     
     if (operations.length === 0) {
+      // If the last result was successful, log and break to prevent repeats
+      if (results.length > 0 && results[results.length - 1].success) {
+        console.log('[OPTIMIZATION] Request satisfied, stopping further planning iterations.');
+        break;
+      }
       console.log(`[chat-response] No more operations planned after iteration ${iteration + 1} - user request satisfied`);
       break;
+    }
+    
+    // Check if we're about to repeat the exact same operation
+    if (results.length > 0 && operations.length === 1) {
+      const lastResult = results[results.length - 1];
+      const nextOperation = operations[0];
+      
+      if (lastResult.operation.tool === nextOperation.tool &&
+          JSON.stringify(lastResult.operation.parameters) === JSON.stringify(nextOperation.parameters)) {
+        console.log(`[AGENT] Preventing duplicate operation execution`);
+        break;
+      }
     }
     
     console.log(`[chat-response] Planned ${operations.length} operation(s) for iteration ${iteration + 1}:`, 
@@ -958,11 +1482,13 @@ async function executeOperationsWithReflection(
     
     // Execute operations that don't require confirmation
     if (operationsToExecute.length > 0) {
+      let shouldBreakOuterLoop = false;
+      
       for (let i = 0; i < operationsToExecute.length; i++) {
         const operation = operationsToExecute[i];
         
         console.log(`[chat-response] Executing operation ${i + 1}/${operationsToExecute.length}: ${operation.description}`);
-        const result = await executeOperation(operation, supabase);
+        const result = await executeOperation(operation, supabase, authHeader);
         
         const executionResult = {
           operation,
@@ -973,10 +1499,20 @@ async function executeOperationsWithReflection(
         
         results.push(executionResult);
         
+        // Check if this was a successful search operation that found results
+        if (result.success && operation.tool === 'vinyl_collection_query' && result.result.found === true) {
+          console.log(`[AGENT] Search successful: found ${result.result.totalResults || 0} albums for "${result.result.query}"`);
+          
+          // If this was a successful search that found results, break out of the outer loop
+          // to prevent infinite repetition of the same search
+          shouldBreakOuterLoop = true;
+          break;
+        }
+        
         // Handle alternative searches
         if (result.shouldRetryWithAlternative && result.alternativeSearch) {
           console.log(`[chat-response] Trying alternative search: ${result.alternativeSearch.description}`);
-          const alternativeResult = await executeOperation(result.alternativeSearch, supabase);
+          const alternativeResult = await executeOperation(result.alternativeSearch, supabase, authHeader);
           results.push({
             operation: result.alternativeSearch,
             success: alternativeResult.success,
@@ -984,6 +1520,12 @@ async function executeOperationsWithReflection(
             error: alternativeResult.error
           });
         }
+      }
+      
+      // Break out of the outer loop if a successful search was found
+      if (shouldBreakOuterLoop) {
+        console.log(`[AGENT] Request satisfied, stopping further planning`);
+        break;
       }
     }
     
@@ -1004,7 +1546,7 @@ async function executeOperationsWithReflection(
 
 
 // Function to execute operations directly
-async function executeOperation(operation: Operation, supabase: any): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
+async function executeOperation(operation: Operation, supabase: any, authHeader: string): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
   console.log(`[chat-response] Executing operation: ${operation.tool} with params:`, operation.parameters);
   
   try {
@@ -1012,7 +1554,7 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
     
     switch (operation.tool) {
       case 'vinyl_collection_query':
-        result = await executeVinylCollectionQuery(operation.parameters, supabase);
+        result = await executeVinylCollectionQuery(operation.parameters, supabase, authHeader);
         break;
       case 'vinyl_add_album':
         result = await executeVinylAddAlbum(operation.parameters, supabase);
@@ -1020,14 +1562,8 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
       case 'vinyl_remove_album':
         result = await executeVinylRemoveAlbum(operation.parameters, supabase);
         break;
-      case 'vinyl_collection_overview':
-        result = await executeVinylCollectionOverview(operation.parameters, supabase);
-        break;
-      case 'vinyl_artist_catalog':
-        result = await executeVinylArtistCatalog(operation.parameters, supabase);
-        break;
-      case 'vinyl_fuzzy_search':
-        result = await executeVinylFuzzySearch(operation.parameters, supabase);
+      case 'vinyl_collection_insights':
+        result = await executeVinylCollectionInsights(operation.parameters, supabase, authHeader);
         break;
       default:
         throw new Error(`Unknown tool: ${operation.tool}`);
@@ -1037,36 +1573,9 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
     
     // Check if this is a collection query that returned no results
     if (operation.tool === 'vinyl_collection_query' && result.found === false) {
-      const hasAlbumName = operation.parameters.albumName && !operation.parameters.artistName;
-      const hasArtistName = operation.parameters.artistName && !operation.parameters.albumName;
-      
-      if (hasAlbumName) {
-        console.log(`[chat-response] Album search returned no results, will try artist search for: ${operation.parameters.albumName}`);
-        return {
-          success: true,
-          result,
-          shouldRetryWithAlternative: true,
-          alternativeSearch: {
-            tool: 'vinyl_collection_query',
-            parameters: { artistName: operation.parameters.albumName },
-            description: `Query collection for albums by ${operation.parameters.albumName} (alternative search)`,
-            requiresConfirmation: false
-          }
-        };
-      } else if (hasArtistName) {
-        console.log(`[chat-response] Artist search returned no results, will try album search for: ${operation.parameters.artistName}`);
-        return {
-          success: true,
-          result,
-          shouldRetryWithAlternative: true,
-          alternativeSearch: {
-            tool: 'vinyl_collection_query',
-            parameters: { albumName: operation.parameters.artistName },
-            description: `Query collection for album "${operation.parameters.artistName}" (alternative search)`,
-            requiresConfirmation: false
-          }
-        };
-      }
+      // For semantic search, we don't need alternative searches as the semantic search
+      // should handle variations and similar terms automatically
+      console.log(`[chat-response] Semantic search returned no results for query: ${operation.parameters.query}`);
     }
     
     return {
@@ -1083,7 +1592,7 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
   }
 }
 
-// Function to format response using GPT
+// Function to format response using GPT with optimized prompt
 async function formatResponseWithGPT(
   originalQuestion: string, 
   executionResults: Array<{operation: Operation, success: boolean, result: any, error?: string}>,
@@ -1097,11 +1606,27 @@ async function formatResponseWithGPT(
 
     // Validate inputs
     const validatedQuestion = validateUserInput(originalQuestion);
-    const validatedContext = validateConversationContext(conversationContext || '');
+    let validatedContext = validateConversationContext(conversationContext || '');
 
     const openai = new OpenAI({
       apiKey: openaiApiKey,
     });
+
+    // Context optimization for response formatting
+    if (validatedContext.length > 800) {
+      const relevance = calculateContextRelevance(validatedContext, validatedQuestion);
+      console.log(`[OPTIMIZATION] Response context relevance: ${relevance.toFixed(2)}, length: ${validatedContext.length}`);
+      
+      if (relevance < 0.2) {
+        // Very low relevance - truncate
+        console.log(`[OPTIMIZATION] Very low relevance context (${relevance.toFixed(2)}), truncating...`);
+        validatedContext = validatedContext.substring(0, 800);
+      } else if (validatedContext.length > 1200) {
+        // High relevance but too long - summarize
+        console.log(`[OPTIMIZATION] Long response context (${validatedContext.length} chars), summarizing...`);
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      }
+    }
 
     const taskInfo = executionResults.map((result, index) => {
       const status = result.success ? 'SUCCESS' : 'FAILED';
@@ -1109,114 +1634,27 @@ async function formatResponseWithGPT(
         ? JSON.stringify(result.result, null, 2)
         : `Error: ${result.error}`;
       
-      return `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${status}\n${details}`;
+      return `${index + 1}. ${result.operation.description} - ${status}\n${details}`;
     }).join('\n\n');
 
-    // Build context section
-    const contextSection = validatedContext ? `## Conversation Context
-${validatedContext}
-
-Use this context only to resolve references, not for commentary.` : '';
-
-    // Build response templates
-    const responseTemplates = `## Response Templates
-
-**Single Album Found**: "Yes! You have [album] by [artist] in your collection."
-**Multiple Albums Found**: "You have [X] albums by [artist]: [list with exact titles]"
-**Artist Search with Results**: "You have [X] albums by [artist] in your collection: [list with exact titles]"
-**No Results**: "No, you don't have [search term] in your collection."
-**Add Success**: "Successfully added [album] by [artist] to your collection!"
-**Remove Success**: "Successfully removed [album] by [artist] from your collection."
-**Conditional Found**: "I checked and you already have [album] by [artist] in your collection."
-**Conditional Added**: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
-**Alternative Search**: "I didn't find [original search], but I found [X] albums by [artist]: [list]"
-**Collection Overview**: "Your vinyl collection contains [X] albums by [Y] artists. Here are your albums: [list]. Collection stats: [stats]"
-**Artist Catalog**: "You have [X] albums by [artist] in your collection: [list]. Artist stats: [stats]"
-**Fuzzy Search**: "I found [X] albums containing '[search term]' in the title: [list]"
-**Errors**: "Sorry, I couldn't [action] because [reason]."`;
-
-    const systemPrompt = `## Role
-Friendly vinyl collection assistant that provides clear, helpful responses.
-
-## Task
-Convert database results into natural, conversational responses that are informative and user-friendly.
-
-## Rules
-- Use exact album/artist names from results
-- Be conversational and helpful
-- Explain what you found clearly
-- Avoid contradictory statements
-- Use friendly, enthusiastic tone for positive results
-- Be clear about what was searched for vs what was found
-- **When listing multiple albums, artists, or results, ALWAYS use HTML <ul> or <ol> lists.**
-
-## List Formatting Example
-If you need to list albums, use:
-<ul>
-  <li>Album 1</li>
-  <li>Album 2</li>
-  <li>Album 3</li>
-</ul>
-
-## Response Logic
-**For collection queries:**
-- If searching for specific album + artist and found: "Yes! You have [album] by [artist] in your collection."
-- If searching for artist only and found albums: "You have [X] albums by [artist] in your collection: <ul><li>Album 1</li><li>Album 2</li></ul>"
-- If searching for specific album + artist and not found: "No, you don't have [album] by [artist] in your collection."
-- If searching for artist only and not found: "No, you don't have any albums by [artist] in your collection."
-
-**For operations:**
-- Add success: "Successfully added [album] by [artist] to your collection!"
-- Remove success: "Successfully removed [album] by [artist] from your collection."
-
-**For conditional operations:**
-- Already have: "I checked and you already have [album] by [artist] in your collection."
-- Didn't have, now added: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
-
-**For alternative searches:**
-- "I didn't find [original search], but I found [X] albums by [artist]: <ul><li>Album 1</li><li>Album 2</li></ul>"
-
-**For collection overview:**
-- "Your vinyl collection contains [X] albums by [Y] artists. Here are your albums: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul> Collection stats: [total albums] albums, [total artists] artists, [recent albums] recent acquisitions"
-
-**For artist catalog:**
-- "You have [X] albums by [artist] in your collection: <ul><li>Album 1 (Year)</li><li>Album 2 (Year)</li></ul> Artist stats: [total albums] albums, earliest release [year], latest release [year]"
-
-**For fuzzy search:**
-- "I found [X] albums containing '[search term]' in the title: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul>"
-
-${responseTemplates}
-
-## Input
-User: "${validatedQuestion}"
-Results: ${taskInfo}
-
-${contextSection}
-
-## Response
-Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself. Use HTML <ul> or <ol> lists for any list of albums, artists, or results.`;
+    // Use optimized response template
+    let template = RESPONSE_TEMPLATE
+      .replace('{QUERY}', validatedQuestion)
+      .replace('{RESULTS}', taskInfo);
 
     const messages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: template },
+      { role: 'user', content: validatedQuestion }
     ];
-
-    if (validatedContext) {
-      const contextLines = validatedContext.split('\n').filter(line => line.trim());
-      for (const line of contextLines) {
-        if (line.startsWith('User: ')) {
-          messages.push({ role: 'user', content: line.substring(6) });
-        } else if (line.startsWith('Assistant: ')) {
-          messages.push({ role: 'assistant', content: line.substring(11) });
-        }
-      }
-    }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      temperature: 0.2, // Slightly higher for more natural, friendly responses
-      max_tokens: 400
+      temperature: 0.2,
+      max_tokens: 300 // Reduced from 400 due to shorter prompt
     });
+
+    console.log(`[OPTIMIZATION] Response prompt tokens: ~${Math.ceil(template.length / 4)}`);
 
     const content = completion.choices[0]?.message?.content;
     
@@ -1295,7 +1733,7 @@ Deno.serve(async (req) => {
     if (confirmedOperation) {
       console.log('[chat-response] Executing confirmed operation:', confirmedOperation);
       
-      const result = await executeOperation(confirmedOperation, supabase);
+      const result = await executeOperation(confirmedOperation, supabase, req.headers.get('Authorization') || '');
       
       if (result.success) {
         // Structure the result to match what formatResponseWithGPT expects
@@ -1343,7 +1781,7 @@ Deno.serve(async (req) => {
     }
 
     // Execute operations with reflection and planning
-    const executionResult = await executeOperationsWithReflection(userMessage, conversationContext, supabase);
+    const executionResult = await executeOperationsWithReflection(userMessage, conversationContext, supabase, req.headers.get('Authorization') || '');
     
     // Handle case where no operations were planned
     if (executionResult.results.length === 0 && !executionResult.requiresConfirmation) {
