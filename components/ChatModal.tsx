@@ -52,7 +52,9 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
   const checkEmbeddingStatus = async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke('check-embedding-status');
+      const { data, error } = await supabase.functions.invoke('check-embedding-status', {
+        method: 'GET',
+      });
       
       if (error) {
         console.error('Error checking embedding status:', error);
