@@ -7,21 +7,8 @@ const nextConfig = {
     ]
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'dwnodxgkqevbqfkfyggd.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/artwork/**',
-      },
-      // Allow images from external sources for Tavily artwork search
-      {
-        protocol: 'https',
-        hostname: '**',
-        port: '',
-        pathname: '/**',
-      },
-    ],
+    loader: 'default',
+    unoptimized: true,
   },
 };
 
