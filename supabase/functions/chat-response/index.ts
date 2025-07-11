@@ -100,23 +100,31 @@ async function selectPromptTemplate(query: string, context: string): Promise<'se
 Classify the user's vinyl collection query into the most appropriate template type.
 
 ## Template Types
-- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection")
+- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection", "what year did X come out", "when did X come out", "oldest album", "newest album", "albums from 2020")
 - **add**: Requests to add new albums to collection (e.g., "add X", "if I don't have X, add it")
 - **remove**: Requests to remove albums from collection (e.g., "remove X", "delete X")
-- **insights**: Requests for analysis/statistics about collection (e.g., "analyze my collection", "what genres do I have")
+- **insights**: Requests for analysis/statistics about collection (e.g., "analyze my collection", "what genres do I have", "collection trends")
 - **general**: General questions or unclear intent
 
 ## Examples
 - "do i own any albums by Jane Remover" → search
+- "what year did Kids come out" → search
+- "when did Abbey Road come out" → search
+- "what's my oldest album" → search
+- "what's my newest album" → search
+- "albums from the 70s" → search
 - "add Abbey Road by The Beatles" → add
 - "remove Sgt Pepper" → remove
 - "what genres do I have" → insights
+- "analyze my collection trends" → insights
 - "hello" → general
 
 ## Rules
 - Artist names containing words like "remove" should NOT trigger remove template
 - Focus on user intent, not just keyword matching
 - When in doubt, prefer "search" over "general"
+- Queries about specific album details (release year, when it came out) are search queries
+- Temporal queries (oldest, newest, albums from year) are search queries
 
 ## User Query
 "${query}"
@@ -163,6 +171,37 @@ function selectPromptTemplateFallback(query: string): 'search' | 'add' | 'remove
   if (insightPatterns.test(queryLower)) return 'insights';
   if (searchPatterns.test(queryLower)) return 'search';
   
+  // Check for album-specific queries (asking about specific albums or their details)
+  const albumQueryPatterns = [
+    /\bwhat year\b/, // "what year did X come out"
+    /\bwhen\b/, // "when did X come out"
+    /\brelease\b/, // "release date", "release year"
+    /\bcome out\b/, // "when did X come out"
+    /\bcame out\b/, // "when did X come out"
+    /\bout\b/, // "what year did X come out"
+  ];
+  
+  if (albumQueryPatterns.some(pattern => pattern.test(queryLower))) {
+    return 'search';
+  }
+  
+  // Check for temporal queries (oldest, newest, albums from year)
+  const temporalQueryPatterns = [
+    /\boldest\b/, // "oldest album"
+    /\bnewest\b/, // "newest album"
+    /\bearliest\b/, // "earliest album"
+    /\blatest\b/, // "latest album"
+    /\bfirst\b/, // "first album"
+    /\blast\b/, // "last album"
+    /\brecent\b/, // "recent albums"
+    /\bvintage\b/, // "vintage albums"
+    /\bclassic\b/, // "classic albums"
+  ];
+  
+  if (temporalQueryPatterns.some(pattern => pattern.test(queryLower))) {
+    return 'search';
+  }
+  
   // Fallback: check for common search patterns without explicit action words
   const searchIndicators = [
     'by', // "albums by artist"
@@ -208,7 +247,7 @@ Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "desc
 
 ## Query Patterns
 - Artist queries: "albums by [artist]" → searchType: "artist"
-- Album queries: "do I have [album]" → searchType: "album"
+- Album queries: "do I have [album]", "what year did [album] come out" → searchType: "album"
 - Combined: "[album] by [artist]" → searchType: "combined"
 - Temporal: "oldest", "newest", "2013" → searchType: "temporal"
 - Genre/style: "rock albums" → searchType: "album"
@@ -216,6 +255,15 @@ Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "desc
 ## Examples
 User: "Do I have Dark Side of the Moon?"
 {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Dark Side of the Moon", "searchType": "combined"}, "description": "Search for Dark Side of the Moon", "requiresConfirmation": false}]}
+
+User: "What's my oldest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection", "requiresConfirmation": false}]}
+
+User: "What year did Kids come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search for Kids album to find release year", "requiresConfirmation": false}]}
+
+User: "When did Abbey Road come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search for Abbey Road album to find release year", "requiresConfirmation": false}]}
 
 User: "Add Abbey Road by The Beatles"
 {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles", "requiresConfirmation": true}]}
@@ -244,7 +292,7 @@ Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "para
 
 ## Search Types
 - Artist: "albums by [artist]" → searchType: "artist"
-- Album: "do I have [album]" → searchType: "album"  
+- Album: "do I have [album]", "what year did [album] come out" → searchType: "album"  
 - Combined: "[album] by [artist]" → searchType: "combined"
 - Temporal: "oldest", "newest", "2013" → searchType: "temporal"
 
@@ -254,6 +302,18 @@ User: "What do I have by The Beatles?"
 
 User: "Find albums from the 70s"
 {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums from the 1970s", "searchType": "temporal"}, "description": "Search for 70s albums", "requiresConfirmation": false}]}
+
+User: "What's my oldest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection", "requiresConfirmation": false}]}
+
+User: "What's my newest album?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "newest album", "searchType": "temporal"}, "description": "Find the newest album in the collection", "requiresConfirmation": false}]}
+
+User: "What year did Kids come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search for Kids album to find release year", "requiresConfirmation": false}]}
+
+User: "When did Abbey Road come out?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search for Abbey Road album to find release year", "requiresConfirmation": false}]}
 
 {CONTEXT}
 
@@ -357,9 +417,13 @@ Convert results to natural responses.
 - Be conversational and helpful
 - Use HTML <ul> for lists
 - Match results accurately
+- For release year queries, provide the specific year: "Kids by The Midnight came out in 2018"
+- For album detail queries, focus on the specific information requested
 
 ## Response Patterns
 - Found albums: "I found [X] albums: <ul><li>Album by Artist</li></ul>"
+- Album details: "The album [album] by [artist] came out in [year]"
+- Release year queries: "Kids by The Midnight came out in 2018"
 - No results: "No albums found matching '[query]'"
 - Add success: "Successfully added [album] by [artist]!"
 - Remove success: "Successfully removed [album] by [artist]"
@@ -1213,7 +1277,7 @@ async function executeVinylRemoveAlbum(params: any, supabase: any): Promise<any>
   };
 }
 
-async function executeVinylCollectionInsights(params: any, supabase: any): Promise<any> {
+async function executeVinylCollectionInsights(params: any, supabase: any, authHeader: string): Promise<any> {
   console.log('[chat-response] Executing vinyl_collection_insights with params:', params);
   
   const { insightType = 'genres', limit = 5 } = params;
@@ -1225,7 +1289,7 @@ async function executeVinylCollectionInsights(params: any, supabase: any): Promi
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Authorization': authHeader,
       },
       body: JSON.stringify({
         insightType,
@@ -1499,7 +1563,7 @@ async function executeOperation(operation: Operation, supabase: any, authHeader:
         result = await executeVinylRemoveAlbum(operation.parameters, supabase);
         break;
       case 'vinyl_collection_insights':
-        result = await executeVinylCollectionInsights(operation.parameters, supabase);
+        result = await executeVinylCollectionInsights(operation.parameters, supabase, authHeader);
         break;
       default:
         throw new Error(`Unknown tool: ${operation.tool}`);
@@ -1573,31 +1637,15 @@ async function formatResponseWithGPT(
       return `${index + 1}. ${result.operation.description} - ${status}\n${details}`;
     }).join('\n\n');
 
-    // Build context section
-    const contextSection = validatedContext ? `## Context
-${validatedContext}` : '';
-
     // Use optimized response template
     let template = RESPONSE_TEMPLATE
       .replace('{QUERY}', validatedQuestion)
-      .replace('{RESULTS}', taskInfo)
-      .replace('{CONTEXT}', contextSection);
+      .replace('{RESULTS}', taskInfo);
 
     const messages = [
-      { role: 'system', content: template }
+      { role: 'system', content: template },
+      { role: 'user', content: validatedQuestion }
     ];
-
-    // Add conversation context as user messages (if not already summarized)
-    if (validatedContext && !validatedContext.includes('## Context')) {
-      const contextLines = validatedContext.split('\n').filter(line => line.trim());
-      for (const line of contextLines) {
-        if (line.startsWith('User: ')) {
-          messages.push({ role: 'user', content: line.substring(6) });
-        } else if (line.startsWith('Assistant: ')) {
-          messages.push({ role: 'assistant', content: line.substring(11) });
-        }
-      }
-    }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
