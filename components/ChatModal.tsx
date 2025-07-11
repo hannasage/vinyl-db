@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, MoreVertical, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { X, MoreVertical, Loader2 } from 'lucide-react';
 import ChatInterface from './ChatInterface';
 import { createClient } from '@/utils/supabase/client';
 
@@ -17,7 +17,6 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
     artists: { total: number; withEmbeddings: number; withoutEmbeddings: number; complete: boolean };
     overall: { complete: boolean };
   } | null>(null);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isRunningBatch, setIsRunningBatch] = useState(false);
 
   // Debug logging
@@ -51,7 +50,6 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
   }, [isOpen]);
 
   const checkEmbeddingStatus = async () => {
-    setIsCheckingStatus(true);
     try {
       const supabase = createClient();
       const { data, error } = await supabase.functions.invoke('check-embedding-status');
@@ -64,8 +62,6 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
       setEmbeddingStatus(data);
     } catch (error) {
       console.error('Error checking embedding status:', error);
-    } finally {
-      setIsCheckingStatus(false);
     }
   };
 
