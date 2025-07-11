@@ -147,7 +147,41 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { 
+      status: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      }
+    });
+  }
+
   try {
+    // Initialize Supabase client with user authentication
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    // Add explicit authentication check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
+
     const { text, type = 'single', albumId, artistId } = await req.json();
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -158,16 +192,6 @@ Deno.serve(async (req) => {
     const openai = new OpenAI({
       apiKey: openaiApiKey,
     });
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Supabase configuration missing');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let result: any;
 

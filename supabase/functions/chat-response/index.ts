@@ -83,14 +83,104 @@ function calculateContextRelevance(context: string, currentQuery: string): numbe
   return matchingWords.length / queryWords.length;
 }
 
-// Dynamic prompt selection based on query type
-function selectPromptTemplate(query: string, context: string): 'search' | 'add' | 'remove' | 'insights' | 'general' {
+// AI-powered prompt template selection
+async function selectPromptTemplate(query: string, context: string): Promise<'search' | 'add' | 'remove' | 'insights' | 'general'> {
+  try {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      // Fallback to simple pattern matching if no API key
+      return selectPromptTemplateFallback(query);
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    const templateSelectionPrompt = `## Task
+Classify the user's vinyl collection query into the most appropriate template type.
+
+## Template Types
+- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection")
+- **add**: Requests to add new albums to collection (e.g., "add X", "if I don't have X, add it")
+- **remove**: Requests to remove albums from collection (e.g., "remove X", "delete X")
+- **insights**: Requests for analysis/statistics about collection (e.g., "analyze my collection", "what genres do I have")
+- **general**: General questions or unclear intent
+
+## Examples
+- "do i own any albums by Jane Remover" → search
+- "add Abbey Road by The Beatles" → add
+- "remove Sgt Pepper" → remove
+- "what genres do I have" → insights
+- "hello" → general
+
+## Rules
+- Artist names containing words like "remove" should NOT trigger remove template
+- Focus on user intent, not just keyword matching
+- When in doubt, prefer "search" over "general"
+
+## User Query
+"${query}"
+
+## Response
+Return ONLY the template type: search, add, remove, insights, or general`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'system', content: templateSelectionPrompt }],
+      temperature: 0.1,
+      max_tokens: 10
+    });
+
+    const response = completion.choices[0]?.message?.content?.trim().toLowerCase();
+    
+    if (response && ['search', 'add', 'remove', 'insights', 'general'].includes(response)) {
+      console.log(`[OPTIMIZATION] AI selected template: ${response} for query: "${query}"`);
+      return response as 'search' | 'add' | 'remove' | 'insights' | 'general';
+    }
+    
+    console.log(`[OPTIMIZATION] AI returned invalid template: "${response}", falling back to pattern matching`);
+    return selectPromptTemplateFallback(query);
+    
+  } catch (error) {
+    console.error('[OPTIMIZATION] AI template selection failed:', error);
+    console.log('[OPTIMIZATION] Falling back to pattern matching');
+    return selectPromptTemplateFallback(query);
+  }
+}
+
+// Fallback pattern matching for when AI is unavailable
+function selectPromptTemplateFallback(query: string): 'search' | 'add' | 'remove' | 'insights' | 'general' {
   const queryLower = query.toLowerCase();
   
-  if (queryLower.includes('add') || queryLower.includes('new')) return 'add';
-  if (queryLower.includes('remove') || queryLower.includes('delete')) return 'remove';
-  if (queryLower.includes('insight') || queryLower.includes('analyze') || queryLower.includes('trend')) return 'insights';
-  if (queryLower.includes('find') || queryLower.includes('search') || queryLower.includes('have') || queryLower.includes('show')) return 'search';
+  // Check for explicit action words first (with word boundaries)
+  const addPatterns = /\b(add|new|create|insert)\b/;
+  const removePatterns = /\b(remove|delete|delete|take out|get rid of)\b/;
+  const insightPatterns = /\b(insight|analyze|trend|pattern|statistic|summary)\b/;
+  const searchPatterns = /\b(find|search|have|show|own|got|got any|do i have|do you have|what do i have|what's in my collection)\b/;
+  
+  if (addPatterns.test(queryLower)) return 'add';
+  if (removePatterns.test(queryLower)) return 'remove';
+  if (insightPatterns.test(queryLower)) return 'insights';
+  if (searchPatterns.test(queryLower)) return 'search';
+  
+  // Fallback: check for common search patterns without explicit action words
+  const searchIndicators = [
+    'by', // "albums by artist"
+    'from', // "albums from year"
+    'in', // "albums in collection"
+    'of', // "albums of artist"
+    'with', // "albums with title"
+    'like', // "albums like"
+    'similar to', // "albums similar to"
+    'genre', // "rock albums"
+    'year', // "albums from 2020"
+    'decade', // "albums from the 80s"
+    'era' // "albums from the 70s"
+  ];
+  
+  if (searchIndicators.some(indicator => queryLower.includes(indicator))) {
+    return 'search';
+  }
   
   return 'general';
 }
@@ -383,8 +473,8 @@ async function planOperations(message: string, conversationContext?: string, pre
       }
     }
 
-    // Select appropriate prompt template based on query type
-    const promptType = selectPromptTemplate(validatedMessage, validatedContext);
+    // Select appropriate prompt template based on query type using AI
+    const promptType = await selectPromptTemplate(validatedMessage, validatedContext);
     let template = PROMPT_TEMPLATES[promptType] || PROMPT_TEMPLATES.core;
     console.log(`[OPTIMIZATION] Selected prompt template: ${promptType}`);
 
@@ -493,7 +583,7 @@ Return {"operations": []} if satisfied, or plan next operation.` : '';
 }
 
 // Direct tool execution functions
-async function executeVinylCollectionQuery(params: any, supabase: any): Promise<any> {
+async function executeVinylCollectionQuery(params: any, supabase: any, authHeader: string): Promise<any> {
   const { query, searchType = 'combined', limit = 10, similarityThreshold = 0.7 } = params;
   
   console.log('[chat-response] Executing vinyl_collection_query with params:', params);
@@ -514,13 +604,13 @@ async function executeVinylCollectionQuery(params: any, supabase: any): Promise<
   }
 
   try {
-    // Call the semantic-search function
+    // Call the semantic-search function with user authentication
     const semanticSearchUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/semantic-search`;
     const response = await fetch(semanticSearchUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Authorization': authHeader,
       },
       body: JSON.stringify({
         query,
@@ -560,7 +650,7 @@ async function executeVinylCollectionQuery(params: any, supabase: any): Promise<
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'Authorization': authHeader,
             },
             body: JSON.stringify({
               query,
@@ -1167,7 +1257,8 @@ async function executeVinylCollectionInsights(params: any, supabase: any): Promi
 async function executeOperationsWithReflection(
   userMessage: string, 
   conversationContext: string, 
-  supabase: any
+  supabase: any,
+  authHeader: string
 ): Promise<{results: ExecutionResult[], requiresConfirmation: boolean, confirmationOperations: Operation[]}> {
   const results: ExecutionResult[] = [];
   let iteration = 0;
@@ -1226,7 +1317,7 @@ async function executeOperationsWithReflection(
         const operation = operationsToExecute[i];
         
         console.log(`[chat-response] Executing operation ${i + 1}/${operationsToExecute.length}: ${operation.description}`);
-        const result = await executeOperation(operation, supabase);
+        const result = await executeOperation(operation, supabase, authHeader);
         
         const executionResult = {
           operation,
@@ -1250,7 +1341,7 @@ async function executeOperationsWithReflection(
         // Handle alternative searches
         if (result.shouldRetryWithAlternative && result.alternativeSearch) {
           console.log(`[chat-response] Trying alternative search: ${result.alternativeSearch.description}`);
-          const alternativeResult = await executeOperation(result.alternativeSearch, supabase);
+          const alternativeResult = await executeOperation(result.alternativeSearch, supabase, authHeader);
           results.push({
             operation: result.alternativeSearch,
             success: alternativeResult.success,
@@ -1284,7 +1375,7 @@ async function executeOperationsWithReflection(
 
 
 // Function to execute operations directly
-async function executeOperation(operation: Operation, supabase: any): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
+async function executeOperation(operation: Operation, supabase: any, authHeader: string): Promise<{success: boolean, result: any, error?: string, shouldRetryWithAlternative?: boolean}> {
   console.log(`[chat-response] Executing operation: ${operation.tool} with params:`, operation.parameters);
   
   try {
@@ -1292,7 +1383,7 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
     
     switch (operation.tool) {
       case 'vinyl_collection_query':
-        result = await executeVinylCollectionQuery(operation.parameters, supabase);
+        result = await executeVinylCollectionQuery(operation.parameters, supabase, authHeader);
         break;
       case 'vinyl_add_album':
         result = await executeVinylAddAlbum(operation.parameters, supabase);
@@ -1487,7 +1578,7 @@ Deno.serve(async (req) => {
     if (confirmedOperation) {
       console.log('[chat-response] Executing confirmed operation:', confirmedOperation);
       
-      const result = await executeOperation(confirmedOperation, supabase);
+      const result = await executeOperation(confirmedOperation, supabase, req.headers.get('Authorization') || '');
       
       if (result.success) {
         // Structure the result to match what formatResponseWithGPT expects
@@ -1535,7 +1626,7 @@ Deno.serve(async (req) => {
     }
 
     // Execute operations with reflection and planning
-    const executionResult = await executeOperationsWithReflection(userMessage, conversationContext, supabase);
+    const executionResult = await executeOperationsWithReflection(userMessage, conversationContext, supabase, req.headers.get('Authorization') || '');
     
     // Handle case where no operations were planned
     if (executionResult.results.length === 0 && !executionResult.requiresConfirmation) {

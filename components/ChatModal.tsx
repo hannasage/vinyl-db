@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, MoreVertical, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import ChatInterface from './ChatInterface';
+import { createClient } from '@/utils/supabase/client';
 
 interface ChatModalProps {
   isOpen: boolean;
@@ -10,6 +11,15 @@ interface ChatModalProps {
 }
 
 export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [embeddingStatus, setEmbeddingStatus] = useState<{
+    albums: { total: number; withEmbeddings: number; withoutEmbeddings: number; complete: boolean };
+    artists: { total: number; withEmbeddings: number; withoutEmbeddings: number; complete: boolean };
+    overall: { complete: boolean };
+  } | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [isRunningBatch, setIsRunningBatch] = useState(false);
+
   // Debug logging
   console.log('ChatModal - isOpen:', isOpen);
 
@@ -32,6 +42,57 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, onClose]);
+
+  // Check embedding status when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      checkEmbeddingStatus();
+    }
+  }, [isOpen]);
+
+  const checkEmbeddingStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke('check-embedding-status');
+      
+      if (error) {
+        console.error('Error checking embedding status:', error);
+        return;
+      }
+      
+      setEmbeddingStatus(data);
+    } catch (error) {
+      console.error('Error checking embedding status:', error);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
+  const runBatchEmbeddings = async () => {
+    setIsRunningBatch(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke('batch-embeddings', {
+        body: { type: 'all', limit: 100 }
+      });
+      
+      if (error) {
+        console.error('Error running batch embeddings:', error);
+        return;
+      }
+      
+      console.log('Batch embeddings completed:', data);
+      
+      // Refresh status after completion
+      await checkEmbeddingStatus();
+    } catch (error) {
+      console.error('Error running batch embeddings:', error);
+    } finally {
+      setIsRunningBatch(false);
+      setShowMenu(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -56,16 +117,68 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
             <h2 className="text-lg font-semibold text-gray-900">
               Vinyl Assistant
             </h2>
-            <button
-              onClick={onClose}
-              className="
-                p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/50
-                transition-colors duration-200
-              "
-              aria-label="Close chat"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center space-x-2">
+              {/* 3-dot Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="
+                    p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/50
+                    transition-colors duration-200
+                  "
+                  aria-label="More options"
+                >
+                  <MoreVertical size={18} />
+                </button>
+                
+                {/* Dropdown Menu */}
+                {showMenu && (
+                  <>
+                    {/* Backdrop */}
+                    <div 
+                      className="fixed inset-0 z-50"
+                      onClick={() => setShowMenu(false)}
+                    />
+                    
+                    {/* Menu */}
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                      <div className="p-2">
+                        <button
+                          onClick={runBatchEmbeddings}
+                          disabled={isRunningBatch}
+                          className="
+                            w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700
+                            hover:bg-gray-100 rounded-md transition-colors duration-200
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                          "
+                        >
+                          <span>Run Batch Embeddings</span>
+                          {isRunningBatch ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <span className="text-xs text-gray-500">
+                              {embeddingStatus?.albums.withoutEmbeddings || 0} pending
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Close Button */}
+              <button
+                onClick={onClose}
+                className="
+                  p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/50
+                  transition-colors duration-200
+                "
+                aria-label="Close chat"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
           
           {/* Chat Interface */}
