@@ -22,27 +22,267 @@ interface ExecutionResult {
 
 // Input validation functions
 function validateUserInput(message: string): string {
-  if (!message || typeof message !== 'string') {
-    return '';
-  }
+  if (!message || typeof message !== 'string') return '';
   
   return message
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML
+    .replace(/[<>]/g, '') // Remove HTML-like characters
     .replace(/\s+/g, ' ') // Normalize whitespace
-    .substring(0, 1000); // Limit length
+    .substring(0, 500); // Limit length
 }
 
 function validateConversationContext(context: string): string {
-  if (!context || typeof context !== 'string') {
-    return '';
-  }
+  if (!context || typeof context !== 'string') return '';
   
   return context
     .trim()
-    .replace(/[<>]/g, '')
-    .substring(0, 2000); // Limit context length
+    .replace(/[<>]/g, '') // Remove HTML-like characters
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .substring(0, 2000); // Limit length
 }
+
+// Conversation summarization function
+async function summarizeConversation(context: string, openai: OpenAI): Promise<string> {
+  if (!context || context.length < 1000) return context; // Only summarize long contexts
+  
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Summarize the conversation context in 2-3 sentences, focusing on key references and user preferences. Return only the summary.'
+        },
+        {
+          role: 'user',
+          content: `Summarize this conversation context:\n\n${context}`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 150
+    });
+
+    return completion.choices[0]?.message?.content || context;
+  } catch (error) {
+    console.error('Error summarizing conversation:', error);
+    return context; // Fallback to original context
+  }
+}
+
+// Context relevance scoring
+function calculateContextRelevance(context: string, currentQuery: string): number {
+  if (!context || !currentQuery) return 0;
+  
+  const contextLower = context.toLowerCase();
+  const queryLower = currentQuery.toLowerCase();
+  
+  // Simple relevance scoring based on keyword overlap
+  const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+  const matchingWords = queryWords.filter(word => contextLower.includes(word));
+  
+  return matchingWords.length / queryWords.length;
+}
+
+// Dynamic prompt selection based on query type
+function selectPromptTemplate(query: string, context: string): 'search' | 'add' | 'remove' | 'insights' | 'general' {
+  const queryLower = query.toLowerCase();
+  
+  if (queryLower.includes('add') || queryLower.includes('new')) return 'add';
+  if (queryLower.includes('remove') || queryLower.includes('delete')) return 'remove';
+  if (queryLower.includes('insight') || queryLower.includes('analyze') || queryLower.includes('trend')) return 'insights';
+  if (queryLower.includes('find') || queryLower.includes('search') || queryLower.includes('have') || queryLower.includes('show')) return 'search';
+  
+  return 'general';
+}
+
+// Optimized prompt templates
+const PROMPT_TEMPLATES = {
+  // Core planning prompt (reduced from ~800 to ~300 tokens)
+  core: `## Role
+Vinyl collection planning assistant.
+
+## Task
+Create operation plans using available tools.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "description": "desc", "requiresConfirmation": bool}]}
+
+## Rules
+- JSON only, no explanatory text
+- Add/remove operations require confirmation
+- Support conditional logic ("if I don't have X, add it")
+- Distinguish artist vs album queries
+
+## Available Tools
+{TOOLS}
+
+## Query Patterns
+- Artist queries: "albums by [artist]" → searchType: "artist"
+- Album queries: "do I have [album]" → searchType: "album"
+- Combined: "[album] by [artist]" → searchType: "combined"
+- Temporal: "oldest", "newest", "2013" → searchType: "temporal"
+- Genre/style: "rock albums" → searchType: "album"
+
+## Examples
+User: "Do I have Dark Side of the Moon?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Dark Side of the Moon", "searchType": "combined"}, "description": "Search for Dark Side of the Moon", "requiresConfirmation": false}]}
+
+User: "Add Abbey Road by The Beatles"
+{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles", "requiresConfirmation": true}]}
+
+User: "If I don't have Revolver, add it"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Revolver", "searchType": "combined"}, "description": "Check if Revolver exists", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+{PREVIOUS_RESULTS}
+
+## Current Request
+"{QUERY}"
+
+{REFLECTION_ANALYSIS}`,
+
+  // Search-focused prompt (for search queries)
+  search: `## Role
+Vinyl collection search assistant.
+
+## Task
+Plan search operations using semantic similarity.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "search", "searchType": "type"}, "description": "desc", "requiresConfirmation": false}]}
+
+## Search Types
+- Artist: "albums by [artist]" → searchType: "artist"
+- Album: "do I have [album]" → searchType: "album"  
+- Combined: "[album] by [artist]" → searchType: "combined"
+- Temporal: "oldest", "newest", "2013" → searchType: "temporal"
+
+## Examples
+User: "What do I have by The Beatles?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "The Beatles", "searchType": "artist"}, "description": "Search for Beatles albums", "requiresConfirmation": false}]}
+
+User: "Find albums from the 70s"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums from the 1970s", "searchType": "temporal"}, "description": "Search for 70s albums", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`,
+
+  // Add-focused prompt (for add operations)
+  add: `## Role
+Vinyl collection add assistant.
+
+## Task
+Plan album addition operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "name", "artistName": "artist"}, "description": "desc", "requiresConfirmation": true}]}
+
+## Rules
+- Always requires confirmation
+- Extract album and artist names
+- Support conditional logic
+
+## Examples
+User: "Add Abbey Road by The Beatles"
+{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles", "requiresConfirmation": true}]}
+
+User: "If I don't have Revolver, add it"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Revolver", "searchType": "combined"}, "description": "Check if Revolver exists", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+{PREVIOUS_RESULTS}
+
+## Current Request
+"{QUERY}"
+
+{REFLECTION_ANALYSIS}`,
+
+  // Remove-focused prompt (for remove operations)
+  remove: `## Role
+Vinyl collection remove assistant.
+
+## Task
+Plan album removal operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "name", "artistName": "artist"}, "description": "desc", "requiresConfirmation": true}]}
+
+## Rules
+- Always requires confirmation
+- Extract album and artist names
+
+## Examples
+User: "Remove Sgt Pepper"
+{"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Sgt Pepper", "artistName": "The Beatles"}, "description": "Remove Sgt Pepper", "requiresConfirmation": true}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`,
+
+  // Insights-focused prompt (for analysis queries)
+  insights: `## Role
+Vinyl collection insights assistant.
+
+## Task
+Plan collection analysis operations.
+
+## Output
+Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "type", "limit": 5}, "description": "desc", "requiresConfirmation": false}]}
+
+## Insight Types
+- genres: Analyze musical genres
+- eras: Analyze time periods
+- themes: Analyze collection themes
+- temporal: Analyze temporal patterns
+- recommendations: Generate recommendations
+
+## Examples
+User: "What genres do I have?"
+{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "genres", "limit": 5}, "description": "Analyze genres in collection", "requiresConfirmation": false}]}
+
+User: "Analyze my collection trends"
+{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "temporal", "limit": 3}, "description": "Analyze temporal patterns", "requiresConfirmation": false}]}
+
+{CONTEXT}
+
+## Current Request
+"{QUERY}"`
+};
+
+// Optimized response formatting prompt (reduced from ~400 to ~200 tokens)
+const RESPONSE_TEMPLATE = `## Role
+Friendly vinyl collection assistant.
+
+## Task
+Convert results to natural responses.
+
+## Rules
+- Use exact names from results
+- Be conversational and helpful
+- Use HTML <ul> for lists
+- Match results accurately
+
+## Response Patterns
+- Found albums: "I found [X] albums: <ul><li>Album by Artist</li></ul>"
+- No results: "No albums found matching '[query]'"
+- Add success: "Successfully added [album] by [artist]!"
+- Remove success: "Successfully removed [album] by [artist]"
+- Conditional: "I checked and you [already have/didn't have] [album] by [artist]"
+- Insights: "Here are insights: <ul><li>Insight 1</li><li>Insight 2</li></ul>"
+
+## Input
+User: "{QUERY}"
+Results: {RESULTS}
+
+{CONTEXT}
+
+## Response
+Provide a friendly, clear response that matches the results.`;
 
 // Tool definitions - Enhanced RAG Tools v1.3
 const TOOLS = {
@@ -106,7 +346,7 @@ const TOOLS = {
   }
 };
 
-// Function to plan operations using GPT
+// Function to plan operations using GPT with optimized prompts
 async function planOperations(message: string, conversationContext?: string, previousResults?: any[]): Promise<Operation[]> {
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -116,7 +356,7 @@ async function planOperations(message: string, conversationContext?: string, pre
 
     // Validate inputs
     const validatedMessage = validateUserInput(message);
-    const validatedContext = validateConversationContext(conversationContext || '');
+    let validatedContext = validateConversationContext(conversationContext || '');
     
     if (!validatedMessage) {
       console.log('[chat-response] Empty or invalid message received');
@@ -127,156 +367,59 @@ async function planOperations(message: string, conversationContext?: string, pre
       apiKey: openaiApiKey,
     });
 
+    // Context optimization: summarize long contexts and check relevance
+    if (validatedContext.length > 1000) {
+      const relevance = calculateContextRelevance(validatedContext, validatedMessage);
+      if (relevance < 0.3) {
+        // Low relevance context - summarize or truncate
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      } else if (validatedContext.length > 1500) {
+        // High relevance but too long - summarize
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      }
+    }
+
+    // Select appropriate prompt template based on query type
+    const promptType = selectPromptTemplate(validatedMessage, validatedContext);
+    let template = PROMPT_TEMPLATES[promptType] || PROMPT_TEMPLATES.core;
+
+    // Build dynamic sections
     const toolDescriptions = Object.values(TOOLS).map(tool => 
       `- "${tool.name}": ${tool.description}`
     ).join('\n');
 
-    // Build context sections
-    const contextSection = validatedContext ? `## Conversation Context
-${validatedContext}
-
-Use this context to understand references like "her new album" or "that artist" and maintain conversation continuity.` : '';
+    const contextSection = validatedContext ? `## Context
+${validatedContext}` : '';
 
     const previousResultsSection = previousResults && previousResults.length > 0 ? `## Previous Results
 ${previousResults.map((result, index) => 
-  `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${result.success ? 'SUCCESS' : 'FAILED'}
+  `${index + 1}. ${result.operation.description} - ${result.success ? 'SUCCESS' : 'FAILED'}
    ${result.success ? JSON.stringify(result.result, null, 2) : `Error: ${result.error}`}`
-).join('\n\n')}
+).join('\n\n')}` : '';
 
-Analyze these results and decide if the user's request has been satisfied or if additional operations are needed.` : '';
+    const reflectionAnalysis = previousResults && previousResults.length > 0 ? `
+## Reflection
+Analyze previous results and decide next steps:
+- "if I don't have X, add it": If found: false → plan add; if found: true → return empty
+- "do I have X": Return empty (query answered)
+- Direct "add X": Return empty (handled in first iteration)
 
-    // Build examples section
-    const examples = `## Examples
+Return {"operations": []} if satisfied, or plan next operation.` : '';
 
-**Semantic Search Queries:**
-User: "Do I have Dark Side of the Moon by Pink Floyd?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Dark Side of the Moon Pink Floyd", "searchType": "combined"}, "description": "Search collection for Dark Side of the Moon by Pink Floyd using semantic similarity", "requiresConfirmation": false}]}
-
-User: "What albums do I own by The 1975?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "The 1975", "searchType": "artist"}, "description": "Search for albums by The 1975 using artist search", "requiresConfirmation": false}]}
-
-User: "Show me rock albums"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "rock music albums", "searchType": "album"}, "description": "Search for rock albums using semantic similarity", "requiresConfirmation": false}]}
-
-**Temporal Queries:**
-User: "What's my oldest album?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection by release year", "requiresConfirmation": false}]}
-
-User: "Find albums from the 70s"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums from the 1970s", "searchType": "temporal"}, "description": "Search for albums from the 1970s using temporal search", "requiresConfirmation": false}]}
-
-User: "Show me my newest albums"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "newest albums", "searchType": "temporal"}, "description": "Find the newest albums in the collection by release year", "requiresConfirmation": false}]}
-
-User: "Which albums of mine released in 2013"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums released in 2013", "searchType": "temporal"}, "description": "Find albums from 2013 in the collection", "requiresConfirmation": false}]}
-
-User: "Do I have any Beatles albums?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "The Beatles", "searchType": "artist"}, "description": "Search for albums by The Beatles using artist search", "requiresConfirmation": false}]}
-
-User: "What do I have by Taylor Swift?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Taylor Swift", "searchType": "artist"}, "description": "Search for albums by Taylor Swift using artist search", "requiresConfirmation": false}]}
-
-**Add Operations:**
-User: "Add Abbey Road by The Beatles"
-{"operations": [{"tool": "vinyl_add_album", "parameters": {"albumName": "Abbey Road", "artistName": "The Beatles"}, "description": "Add Abbey Road by The Beatles to collection", "requiresConfirmation": true}]}
-
-**Remove Operations:**
-User: "Remove my copy of Sgt Pepper"
-{"operations": [{"tool": "vinyl_remove_album", "parameters": {"albumName": "Sgt Pepper", "artistName": "The Beatles"}, "description": "Remove Sgt Pepper from collection", "requiresConfirmation": true}]}
-
-**Conditional Logic:**
-User: "If I don't have Revolver, add it"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Revolver", "searchType": "combined"}, "description": "Check if Revolver exists in collection using semantic search", "requiresConfirmation": false}]}
-
-**Collection Insights:**
-User: "What genres do I have?"
-{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "genres", "limit": 5}, "description": "Generate insights about genres in the collection", "requiresConfirmation": false}]}
-
-User: "Analyze my collection trends"
-{"operations": [{"tool": "vinyl_collection_insights", "parameters": {"insightType": "temporal", "limit": 3}, "description": "Analyze temporal patterns in the collection", "requiresConfirmation": false}]}
-
-**Natural Language Queries:**
-User: "What's in my collection?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "all albums in my collection", "searchType": "combined", "limit": 20}, "description": "Get overview of collection using semantic search", "requiresConfirmation": false}]}
-
-User: "Find similar albums to Dark Side of the Moon"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "albums similar to Dark Side of the Moon", "searchType": "combined", "limit": 10}, "description": "Find semantically similar albums", "requiresConfirmation": false}]}`;
-
-    const systemPrompt = `## Role
-You are an intelligent planning assistant for vinyl collection management. You excel at reasoning, understanding context, and creating sophisticated operation plans.
-
-## Task
-Analyze user requests and create operation plans using available tools.
-
-## Output Format
-**CRITICAL**: Return ONLY valid JSON with this structure:
-{
-  "operations": [
-    {
-      "tool": "tool_name",
-      "parameters": { "param1": "value1" },
-      "description": "Human-readable description",
-      "requiresConfirmation": true/false
-    }
-  ]
-}
-
-## Rules
-- **JSON only**: No explanatory text, reasoning, or natural language
-- **Confirmation required**: Add/remove operations must set requiresConfirmation: true
-- **Conditional logic**: Support "if I don't have X, add it" patterns
-- **Artist vs album detection**: Distinguish between artist names and album titles
-- **Iterative planning**: Break complex requests into logical steps
-
-## Available Tools
-${toolDescriptions}
-
-## Planning Patterns
-
-**Conditional Operations:**
-- "if I don't have X, add it": First query, then add if not found
-- "if I have X, remove it": First query, then remove if found
-- "do I have X": Query only, then return empty operations
-
-**Search Type Selection:**
-- **Artist queries**: "albums by [artist]", "what do I have by [artist]", "[artist] albums" → use searchType: "artist"
-- **Album queries**: "do I have [album]", "find [album]", "search for [album]" → use searchType: "album"  
-- **Combined queries**: "[album] by [artist]", "both album and artist mentioned" → use searchType: "combined"
-- **Temporal queries**: "oldest", "newest", "2013", "70s", "recent" → use searchType: "temporal"
-- **Genre/style queries**: "rock albums", "jazz music", "punk records" → use searchType: "album"
-- **When uncertain**: prefer searchType: "combined" for better results
-
-${examples}
-
-${contextSection}
-
-${previousResultsSection}
-
-## Current Request
-"${validatedMessage}"
-
-${previousResults && previousResults.length > 0 ? `
-## Reflection Analysis
-Analyze the previous results and original request to decide next steps:
-
-- **"if I don't have X, add it"**: If found: false → plan add operation; if found: true → return empty operations
-- **"do I have X"**: Return empty operations (query answered the question)
-- **Direct "add X"**: Return empty operations (should have been handled in first iteration)
-
-**Decision**: Return empty operations array (request satisfied) or plan the next operation needed.
-
-**Valid responses:**
-{"operations": []}  // no more operations needed
-{"operations": [{"tool": "vinyl_add_album", "parameters": {...}, "description": "...", "requiresConfirmation": true}]}  // plan next operation` : ''}
-
-Return only the JSON object with the operations array.`;
+    // Replace template placeholders
+    template = template
+      .replace('{TOOLS}', toolDescriptions)
+      .replace('{CONTEXT}', contextSection)
+      .replace('{PREVIOUS_RESULTS}', previousResultsSection)
+      .replace('{QUERY}', validatedMessage)
+      .replace('{REFLECTION_ANALYSIS}', reflectionAnalysis);
 
     const messages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: template }
     ];
 
-    if (validatedContext) {
+    // Add conversation context as user messages (if not already summarized)
+    if (validatedContext && !validatedContext.includes('## Context')) {
       const contextLines = validatedContext.split('\n').filter(line => line.trim());
       for (const line of contextLines) {
         if (line.startsWith('User: ')) {
@@ -293,7 +436,7 @@ Return only the JSON object with the operations array.`;
       model: 'gpt-4o-mini',
       messages,
       temperature: 0.1,
-      max_tokens: 800
+      max_tokens: 600 // Reduced from 800 due to shorter prompts
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -1130,7 +1273,7 @@ async function executeOperation(operation: Operation, supabase: any): Promise<{s
   }
 }
 
-// Function to format response using GPT
+// Function to format response using GPT with optimized prompt
 async function formatResponseWithGPT(
   originalQuestion: string, 
   executionResults: Array<{operation: Operation, success: boolean, result: any, error?: string}>,
@@ -1144,11 +1287,23 @@ async function formatResponseWithGPT(
 
     // Validate inputs
     const validatedQuestion = validateUserInput(originalQuestion);
-    const validatedContext = validateConversationContext(conversationContext || '');
+    let validatedContext = validateConversationContext(conversationContext || '');
 
     const openai = new OpenAI({
       apiKey: openaiApiKey,
     });
+
+    // Context optimization for response formatting
+    if (validatedContext.length > 800) {
+      const relevance = calculateContextRelevance(validatedContext, validatedQuestion);
+      if (relevance < 0.2) {
+        // Very low relevance - truncate
+        validatedContext = validatedContext.substring(0, 800);
+      } else if (validatedContext.length > 1200) {
+        // High relevance but too long - summarize
+        validatedContext = await summarizeConversation(validatedContext, openai);
+      }
+    }
 
     const taskInfo = executionResults.map((result, index) => {
       const status = result.success ? 'SUCCESS' : 'FAILED';
@@ -1156,92 +1311,25 @@ async function formatResponseWithGPT(
         ? JSON.stringify(result.result, null, 2)
         : `Error: ${result.error}`;
       
-      return `${index + 1}. ${result.operation.description} (${result.operation.tool}) - ${status}\n${details}`;
+      return `${index + 1}. ${result.operation.description} - ${status}\n${details}`;
     }).join('\n\n');
 
     // Build context section
-    const contextSection = validatedContext ? `## Conversation Context
-${validatedContext}
+    const contextSection = validatedContext ? `## Context
+${validatedContext}` : '';
 
-Use this context only to resolve references, not for commentary.` : '';
-
-    // Build response templates
-    const responseTemplates = `## Response Templates
-
-**Semantic Search Results**: "I found [X] albums matching '[query]': <ul><li>Album 1 by Artist 1 (similarity: XX%)</li><li>Album 2 by Artist 2 (similarity: XX%)</li></ul>"
-**Temporal Search Results**: "Your oldest album from [year]: [album] by [artist] ([year])"
-**Specific Year Results**: "Your album from [year]: [album] by [artist] ([year])"
-**No Search Results**: "No albums found matching '[query]' in your collection."
-**Add Success**: "Successfully added [album] by [artist] to your collection!"
-**Remove Success**: "Successfully removed [album] by [artist] from your collection."
-**Conditional Found**: "I checked and you already have [album] by [artist] in your collection."
-**Conditional Added**: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
-**Collection Insights**: "Here are some insights about your collection: <ul><li>Insight 1: [description]</li><li>Insight 2: [description]</li></ul>"
-**Fallback Search**: "I found [X] albums using fallback search: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul>"
-**Errors**: "Sorry, I couldn't [action] because [reason]."`;
-
-    const systemPrompt = `## Role
-Friendly vinyl collection assistant that provides clear, helpful responses.
-
-## Task
-Convert database results into natural, conversational responses that are informative and user-friendly.
-
-## Rules
-- Use exact album/artist names from results
-- Be conversational and helpful
-- Explain what you found clearly
-- Avoid contradictory statements
-- Use friendly, enthusiastic tone for positive results
-- Be clear about what was searched for vs what was found
-- **When listing multiple albums, artists, or results, ALWAYS use HTML <ul> or <ol> lists.**
-
-## List Formatting Example
-If you need to list albums, use:
-<ul>
-  <li>Album 1</li>
-  <li>Album 2</li>
-  <li>Album 3</li>
-</ul>
-
-## Response Logic
-**For semantic search queries:**
-- If found albums: "I found [X] albums matching '[query]': <ul><li>Album 1 by Artist 1 (similarity: XX%)</li><li>Album 2 by Artist 2 (similarity: XX%)</li></ul>"
-- If no results: "No albums found matching '[query]' in your collection."
-- If fallback used: "I found [X] albums using fallback search: <ul><li>Album 1 by Artist 1</li><li>Album 2 by Artist 2</li></ul>"
-
-**For temporal queries:**
-- If found albums: "Your oldest album from [year]: [album] by [artist] ([year])"
-- If multiple albums: "Your oldest albums from [year]: <ul><li>Album 1 by Artist 1 ([year])</li><li>Album 2 by Artist 2 ([year])</li></ul>"
-- If specific year: "Your album from [year]: [album] by [artist] ([year])"
-- If no results for specific year: "You don't have any albums from [year] in your collection"
-
-**For operations:**
-- Add success: "Successfully added [album] by [artist] to your collection!"
-- Remove success: "Successfully removed [album] by [artist] from your collection."
-
-**For conditional operations:**
-- Already have: "I checked and you already have [album] by [artist] in your collection."
-- Didn't have, now added: "I checked and you didn't have [album] by [artist], so I've added it to your collection!"
-
-**For collection insights:**
-- "Here are some insights about your collection: <ul><li>Insight 1: [description]</li><li>Insight 2: [description]</li></ul>"
-
-${responseTemplates}
-
-## Input
-User: "${validatedQuestion}"
-Results: ${taskInfo}
-
-${contextSection}
-
-## Response
-Provide a friendly, clear response that accurately reflects what was found or done. Make sure your response matches the actual results and doesn't contradict itself. Use HTML <ul> or <ol> lists for any list of albums, artists, or results.`;
+    // Use optimized response template
+    let template = RESPONSE_TEMPLATE
+      .replace('{QUERY}', validatedQuestion)
+      .replace('{RESULTS}', taskInfo)
+      .replace('{CONTEXT}', contextSection);
 
     const messages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: template }
     ];
 
-    if (validatedContext) {
+    // Add conversation context as user messages (if not already summarized)
+    if (validatedContext && !validatedContext.includes('## Context')) {
       const contextLines = validatedContext.split('\n').filter(line => line.trim());
       for (const line of contextLines) {
         if (line.startsWith('User: ')) {
@@ -1255,8 +1343,8 @@ Provide a friendly, clear response that accurately reflects what was found or do
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      temperature: 0.2, // Slightly higher for more natural, friendly responses
-      max_tokens: 400
+      temperature: 0.2,
+      max_tokens: 300 // Reduced from 400 due to shorter prompt
     });
 
     const content = completion.choices[0]?.message?.content;

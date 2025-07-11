@@ -68,8 +68,8 @@ export default function ChatInterface({ className = '' }: ChatInterfaceProps) {
     try {
       const supabase = createClient();
       
-      // Get conversation context from short-term memory
-      const conversationContext = memoryManager.getConversationContext(10);
+      // Get conversation context from short-term memory with current query for relevance scoring
+      const conversationContext = memoryManager.getConversationContext(10, userMessage.content);
       
       const { data, error } = await supabase.functions.invoke('chat-response', {
         body: { 
