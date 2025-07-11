@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, MoreVertical, Loader2 } from 'lucide-react';
 import ChatInterface from './ChatInterface';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '../../utils/supabase/client';
 
 interface ChatModalProps {
   isOpen: boolean;

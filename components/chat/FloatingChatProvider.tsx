@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '../utils/supabase/client';
+import { createClient } from '../../utils/supabase/client';
 import FloatingChatButton from './FloatingChatButton';
 import ChatModal from './ChatModal';
 

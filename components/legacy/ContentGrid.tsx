@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlbumArtBox } from '@/components/AlbumArtBox';
+import { AlbumArtBox } from '@/components/album/AlbumArtBox';
 import { FullAlbumDetails } from '@/data/types';
 
 const ContentGrid = ({ data }: {data: FullAlbumDetails[]}) => {

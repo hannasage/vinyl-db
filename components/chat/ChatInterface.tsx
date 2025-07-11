@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
-import { ChatMessageType, ChatResponse } from '../data/types';
-import { createClient } from '../utils/supabase/client';
-import { memoryManager } from '../utils/agent/memory';
+import { ChatMessageType, ChatResponse } from '../../data/types';
+import { createClient } from '../../utils/supabase/client';
+import { memoryManager } from '../../utils/agent/memory';
 
 interface ChatInterfaceProps {
   className?: string;

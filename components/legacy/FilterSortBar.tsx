@@ -1,5 +1,5 @@
 import React from 'react';
-import { FilterButtonRow } from '@/components/FilterButtonRow';
+import { FilterButtonRow } from '@/components/legacy/FilterButtonRow';
 
 const TITLE = "vinyl"
 export const FilterSortBar = () => (
