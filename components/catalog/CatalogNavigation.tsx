@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -30,12 +30,12 @@ export default function CatalogNavigation({ onSearch }: CatalogNavigationProps) 
     }, 150);
   };
 
-  const handleCollapse = () => {
+  const handleCollapse = useCallback(() => {
     setSearchQuery('');
     onSearch('');
     setIsExpanded(false);
     inputRef.current?.blur();
-  };
+  }, [onSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -76,7 +76,7 @@ export default function CatalogNavigation({ onSearch }: CatalogNavigationProps) 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isExpanded, searchQuery]);
+  }, [isExpanded, searchQuery, handleCollapse]);
 
   return (
     <nav className={`catalog-nav ${isAuthenticated ? 'with-chat-button' : ''}`}>
