@@ -56,7 +56,7 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
         onSearch={handleSearch}
       />
       
-      {carouselItems.length > 0 && (
+      {/* {carouselItems.length > 0 && (
         <div>
           <CoverFlowCarousel
             items={carouselItems}
@@ -66,7 +66,7 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
             showTitle={true}
           />
         </div>
-      )}
+      )} */}
       
       <CatalogGrid
         albums={filteredAlbums}

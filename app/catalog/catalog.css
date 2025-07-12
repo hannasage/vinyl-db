@@ -116,68 +116,65 @@
   cursor: pointer;
 }
 
-/* Collapsed state - floating search icon */
+/* Collapsed state - floating search icon - matching AI button style */
 .aero-search-bar.collapsed {
   width: 3.5rem;
   height: 3.5rem;
   max-width: 3.5rem;
-  background: linear-gradient(135deg, rgba(177, 156, 217, 0.4) 0%, rgba(122, 104, 188, 0.5) 100%);
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
   box-shadow: 
-    0 4px 12px rgba(177, 156, 217, 0.2),
+    0 4px 12px rgba(147, 51, 234, 0.3),
     0 2px 8px rgba(0, 0, 0, 0.3);
   border-radius: 50%;
-  border: 1.5px solid rgba(177, 156, 217, 0.4);
+  border: none;
+  position: relative;
 }
 
 .aero-search-bar.collapsed:hover {
-  background: linear-gradient(135deg, rgba(177, 156, 217, 0.5) 0%, rgba(122, 104, 188, 0.6) 100%);
+  background: linear-gradient(135deg, rgba(147, 51, 234, 1) 0%, rgba(59, 130, 246, 1) 100%);
   box-shadow: 
-    0 6px 16px rgba(177, 156, 217, 0.25),
+    0 6px 16px rgba(147, 51, 234, 0.4),
     0 3px 10px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px) scale(1.05);
-  border: 1.5px solid rgba(177, 156, 217, 0.6);
 }
 
-/* Expanded state - full search bar */
-.aero-search-bar.expanded {
-  width: 100%;
-  max-width: 480px;
-  background: linear-gradient(135deg, rgba(177, 156, 217, 0.5) 0%, rgba(122, 104, 188, 0.6) 100%);
-  box-shadow: 
-    0 4px 12px rgba(177, 156, 217, 0.25),
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
-  border: 1.5px solid rgba(177, 156, 217, 0.5);
-  cursor: text;
-}
-
-.aero-search-bar::before {
+/* Pulse animation ring for collapsed search bar - matching AI button */
+.aero-search-bar.collapsed::after {
   content: '';
   position: absolute;
   inset: 0;
-  padding: 2px;
-  margin: -2px;
-  background: linear-gradient(45deg, #b19cd9, #c8a2e8, #9b7bb8, #d4b3f0, #b19cd9);
-  background-size: 400% 400%;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  animation: gradientShift 3s ease infinite;
-  opacity: 0.4;
-  transition: all 0.3s ease;
-}
-
-.aero-search-bar.collapsed::before {
   border-radius: 50%;
-  opacity: 0.6;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  opacity: 0.2;
+  animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+  z-index: -1;
 }
 
-.aero-search-bar.expanded::before {
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Expanded state - full search bar - matching AI button style */
+.aero-search-bar.expanded {
+  width: 100%;
+  max-width: 480px;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  box-shadow: 
+    0 4px 12px rgba(147, 51, 234, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   border-radius: 0.75rem;
-  opacity: 0.8;
-  animation: gradientShift 1.5s ease infinite;
+  border: none;
+  cursor: text;
+}
+
+/* Remove the gradient border animation to match AI button simplicity */
+.aero-search-bar::before {
+  display: none;
 }
 
 .aero-search-input {
@@ -203,7 +200,7 @@
 
 .aero-search-bar.expanded .aero-search-input {
   width: 100%;
-  padding: 0.875rem 3rem 0.875rem 2.75rem;
+  padding: 0.875rem 4rem 0.875rem 2.75rem;
   opacity: 1;
   pointer-events: auto;
   border-radius: 0.75rem;
@@ -238,6 +235,10 @@
   transform: translate(-50%, -50%);
 }
 
+.aero-search-bar.collapsed:hover .search-icon {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
 .aero-search-bar.expanded .search-icon {
   left: 1.125rem;
   top: 50%;
@@ -252,8 +253,8 @@
   background: rgba(255, 255, 255, 0.1);
   border: none;
   border-radius: 50%;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
