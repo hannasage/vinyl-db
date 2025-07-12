@@ -19,7 +19,7 @@ export default function LandingContent() {
         </Link>
         
         <Link
-          href="https://open.spotify.com/playlist/your-playlist-id"
+          href="https://open.spotify.com/playlist/5v6rho05qMtlqC829KfDjR?si=6c24c3429da74d65"
           target="_blank"
           rel="noopener noreferrer"
           className="group flex items-center gap-3 bg-white/10 backdrop-blur-sm text-white px-6 py-3 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/20"
