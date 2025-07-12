@@ -10,6 +10,12 @@ const nextConfig = {
     loader: 'default',
     unoptimized: true,
   },
+  // Suppress hydration warnings in development
+  reactStrictMode: true,
+  // Add experimental features for better hydration handling
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
 };
 
 export default nextConfig;

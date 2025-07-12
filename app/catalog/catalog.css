@@ -4,7 +4,7 @@
   /* Primary Colors */
   --vinyl-black: #0a0a0a;
   --vinyl-brown: #2d1810;
-  --vinyl-gold: #b19cd9; /* Updated to lavender */
+  --vinyl-gold: #886aba; /* Updated to lavender */
   --vinyl-silver: #c0c0c0;
   
   /* Secondary Colors */
@@ -53,20 +53,35 @@
   border-radius: 0;
   border: none;
   box-shadow: none;
-  margin: 0 auto;
-  max-width: 520px;
+  margin: 0;
   padding: 0;
   position: fixed;
-  top: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9998;
   height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
   pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+/* When user is authenticated and AI chat button is present, move search up */
+.catalog-nav.with-chat-button {
+  bottom: 5.5rem; /* 88px - positions above the chat button */
+}
+
+.catalog-nav .catalog-nav-content {
+  transition: all 0.3s ease;
+}
+
+.aero-search-bar.collapsed ~ * {
+  max-width: 3rem;
+}
+
+.aero-search-bar.expanded ~ * {
+  max-width: 520px;
 }
 
 .catalog-nav-content, .aero-search-bar {
@@ -90,42 +105,79 @@
 }
 
 .aero-search-bar {
-  width: 100%;
-  max-width: 480px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(20,20,20,0.82) 0%, rgba(40,40,40,0.72) 100%);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.356);
-  border-radius: 0.5rem;
-  border: 1.5px solid rgba(255,255,255,0.18);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   pointer-events: auto;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
-.aero-search-bar::before {
+/* Collapsed state - floating search icon - matching AI button style */
+.aero-search-bar.collapsed {
+  width: 3.5rem;
+  height: 3.5rem;
+  max-width: 3.5rem;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  box-shadow: 
+    0 4px 12px rgba(147, 51, 234, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  border: none;
+  position: relative;
+}
+
+.aero-search-bar.collapsed:hover {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 1) 0%, rgba(59, 130, 246, 1) 100%);
+  box-shadow: 
+    0 6px 16px rgba(147, 51, 234, 0.4),
+    0 3px 10px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Pulse animation ring for collapsed search bar - matching AI button */
+.aero-search-bar.collapsed::after {
   content: '';
   position: absolute;
   inset: 0;
-  padding: 2px;
-  margin: -2px;
-  background: linear-gradient(45deg, #b19cd9, #9b7bb8, #8a6bb8, #b19cd9);
-  background-size: 400% 400%;
-  border-radius: 0.5rem;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  animation: gradientShift 3s ease infinite;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  opacity: 0.2;
+  animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Expanded state - full search bar - matching AI button style */
+.aero-search-bar.expanded {
+  width: 100%;
+  max-width: 480px;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  box-shadow: 
+    0 4px 12px rgba(147, 51, 234, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  border: none;
+  cursor: text;
+}
+
+/* Remove the gradient border animation to match AI button simplicity */
+.aero-search-bar::before {
+  display: none;
 }
 
 .aero-search-input {
-  width: 100%;
-  padding: 0.75rem 2rem 0.75rem 2.5rem;
-  font-size: 1rem;
-  border-radius: 0.75rem;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -134,6 +186,24 @@
   transition: all 0.3s ease;
   position: relative;
   z-index: 1;
+  letter-spacing: 0.025em;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.aero-search-bar.collapsed .aero-search-input {
+  width: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.aero-search-bar.expanded .aero-search-input {
+  width: 100%;
+  padding: 0.875rem 4rem 0.875rem 2.75rem;
+  opacity: 1;
+  pointer-events: auto;
+  border-radius: 0.75rem;
 }
 
 .aero-search-input:focus {
@@ -143,20 +213,61 @@
 }
 
 .aero-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
   opacity: 1;
+  font-weight: 400;
 }
 
-.aero-search-bar svg {
+.search-icon {
   position: absolute;
-  left: 1rem;
+  color: rgba(255, 255, 255, 0.95);
+  pointer-events: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  z-index: 2;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  transition: all 0.3s ease;
+}
+
+.aero-search-bar.collapsed .search-icon {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.aero-search-bar.collapsed:hover .search-icon {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.aero-search-bar.expanded .search-icon {
+  left: 1.125rem;
   top: 50%;
   transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.9);
-  pointer-events: none;
-  width: 1.25rem;
-  height: 1.25rem;
+}
+
+.clear-button {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
   z-index: 2;
+}
+
+.clear-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: translateY(-50%) scale(1.1);
 }
 
 /* Remove old search bar styles if present */
@@ -176,7 +287,6 @@
   gap: 0;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   padding: 0;
-  padding-top: 6.5rem; /* Space for nav bar */
   max-width: none;
   margin: 0;
 }
@@ -362,24 +472,27 @@
 
 @media (max-width: 640px) {
   .catalog-nav {
-    left: 0;
-    right: 0;
+    /* Keep right corner positioning on mobile */
+    bottom: 1.5rem;
+    right: 1.5rem;
+    left: auto;
     transform: none;
     max-width: none;
-    width: 100%;
+    width: auto;
+  }
+  
+  .catalog-nav.with-chat-button {
+    bottom: 5.5rem;
   }
   
   .catalog-nav-content {
-    width: 100%;
+    width: auto;
     max-width: none;
     box-sizing: border-box;
   }
   
-  .aero-search-bar {
-    width: 88vw;
-    max-width: 100%;
-    margin: 0 0.5rem;
-    padding-left: 0;
-    padding-right: 0;
+  .aero-search-bar.expanded {
+    width: 320px;
+    max-width: calc(100vw - 3rem);
   }
 } 

@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import AlbumBackdrop from '@/components/landing/AlbumBackdrop';
 import LandingContent from '@/components/landing/LandingContent';
+import { stableRandomSelect } from '@/utils/stableRandom';
 
 export interface AlbumListRes {
   list: Array<FullAlbumDetails>
@@ -19,11 +20,11 @@ export default async function LandingPage() {
   
   if (!data || error) redirect('/error')
   
-  // Randomize the album list for the backdrop
-  const randomizedAlbums = data.list
-    .filter(album => album.artwork_url) // Only include albums with artwork
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 96); // Limit to 96 albums for performance (12x8 grid)
+  // Use stable random selection for the backdrop
+  const albumsWithArtwork = data.list.filter(album => album.artwork_url);
+  const seed = `${albumsWithArtwork.length}-${albumsWithArtwork[0]?.title || 'default'}`;
+  
+  const randomizedAlbums = stableRandomSelect(albumsWithArtwork, 96, seed);
   
   return (
     <div className="relative min-h-screen overflow-hidden">

@@ -9,8 +9,12 @@ export default function FloatingChatProvider() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    // Mark as client-side to prevent hydration mismatch
+    setIsClient(true);
+    
     const supabase = createClient();
 
     // Check initial auth state
@@ -49,12 +53,10 @@ export default function FloatingChatProvider() {
     }
   };
 
-  // Don't render anything while checking auth state
-  if (isLoading) {
+  // Don't render anything until client-side hydration is complete
+  if (!isClient || isLoading) {
     return null;
   }
-
-
 
   return (
     <>
