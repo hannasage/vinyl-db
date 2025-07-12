@@ -29,9 +29,6 @@ export function CoverFlowCarousel({
   showTitle = false
 }: CoverFlowCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(0);
-  const [dragOffset, setDragOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleItemClick = useCallback((index: number) => {
@@ -53,84 +50,22 @@ export function CoverFlowCarousel({
     }
   }, [currentIndex, items, onItemSelect]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart(e.clientX);
-    setDragOffset(0);
-  }, []);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    
-    const offset = e.clientX - dragStart;
-    setDragOffset(offset);
-  }, [isDragging, dragStart]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDragging) return;
-    
-    setIsDragging(false);
-    
-    const threshold = 80;
-    
-    if (Math.abs(dragOffset) > threshold) {
-      if (dragOffset < -threshold && currentIndex < items.length - 1) {
-        const newIndex = currentIndex + 1;
-        setCurrentIndex(newIndex);
-        onItemSelect?.(items[newIndex], newIndex);
-      } else if (dragOffset > threshold && currentIndex > 0) {
-        const newIndex = currentIndex - 1;
-        setCurrentIndex(newIndex);
-        onItemSelect?.(items[newIndex], newIndex);
-      }
-    }
-    
-    // Reset drag offset
-    setDragOffset(0);
-  }, [isDragging, dragOffset, currentIndex, items, onItemSelect]);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    setIsDragging(true);
-    setDragStart(e.touches[0].clientX);
-    setDragOffset(0);
-  }, []);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging) return;
-    
-    const offset = e.touches[0].clientX - dragStart;
-    setDragOffset(offset);
-  }, [isDragging, dragStart]);
-
-  const handleTouchEnd = useCallback(() => {
-    handleMouseUp();
-  }, [handleMouseUp]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     container.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchmove', handleTouchMove);
-    document.addEventListener('touchend', handleTouchEnd);
 
     return () => {
       container.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [handleKeyDown, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+  }, [handleKeyDown]);
 
   const getItemStyle = (index: number) => {
     const distance = index - currentIndex;
-    const dragOffsetFactor = isDragging ? Math.max(-1.5, Math.min(1.5, dragOffset / 120)) : 0;
-    const adjustedDistance = distance - dragOffsetFactor;
-    
-    const absDistance = Math.abs(adjustedDistance);
+    const absDistance = Math.abs(distance);
     const isCenter = absDistance < 0.1;
     
     // Smooth interpolation functions
@@ -151,7 +86,7 @@ export function CoverFlowCarousel({
     let translateX = 0;
     if (!isCenter) {
       const baseOffset = 200;
-      const exponentialSpacing = baseOffset * Math.sign(adjustedDistance) * Math.pow(absDistance, 0.8);
+      const exponentialSpacing = baseOffset * Math.sign(distance) * Math.pow(absDistance, 0.8);
       translateX = exponentialSpacing;
     }
     
@@ -176,34 +111,28 @@ export function CoverFlowCarousel({
       transform: `translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
       opacity,
       zIndex,
-      transition: isDragging 
-        ? 'none' 
-        : 'all 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      transition: 'all 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       transformOrigin: 'center bottom',
-      willChange: isDragging ? 'transform' : 'auto',
       '--darkness-overlay': darknessOverlay,
     };
   };
 
-  return (
-    <div
-      ref={containerRef}
-      className={classNames(
-        'relative w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black',
-        'flex flex-col cursor-grab select-none',
-        isDragging && 'cursor-grabbing',
-        className
-      )}
-      style={{ 
-        perspective: '1200px',
-        perspectiveOrigin: 'center center'
-      }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
-      tabIndex={0}
-      role="listbox"
-      aria-label="Cover flow carousel"
-    >
+      return (
+      <div
+        ref={containerRef}
+        className={classNames(
+          'relative w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black',
+          'flex flex-col select-none',
+          className
+        )}
+        style={{ 
+          perspective: '1200px',
+          perspectiveOrigin: 'center center'
+        }}
+        tabIndex={0}
+        role="listbox"
+        aria-label="Cover flow carousel"
+      >
       {showTitle && (
         <div className="text-center py-8">
           <h2 className="text-3xl font-bold text-[#0277BD] opacity-50 mb-2">Featured Albums</h2>
