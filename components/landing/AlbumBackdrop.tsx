@@ -19,11 +19,11 @@ export default function AlbumBackdrop({ albums }: AlbumBackdropProps) {
       
       {/* Scrolling album grid */}
       <div className="absolute inset-0 animate-scroll">
-        <div className="grid grid-cols-12 grid-rows-8 md:grid-cols-10 md:grid-rows-10 lg:grid-cols-8 lg:grid-rows-12 gap-1 p-2 w-[200%]">
+        <div className="grid grid-cols-12 grid-rows-8 md:grid-cols-10 md:grid-rows-10 lg:grid-cols-8 lg:grid-rows-12 w-[200%]">
           {duplicatedAlbums.map((album, index) => (
             <div
               key={`${album.id}-${index}`}
-              className="relative aspect-square rounded-lg overflow-hidden shadow-lg hover:scale-105 transition-transform duration-300"
+              className="relative aspect-square overflow-hidden hover:scale-105 transition-transform duration-300"
             >
               {album.artwork_url ? (
                 <Image
