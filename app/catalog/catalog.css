@@ -471,24 +471,27 @@
 
 @media (max-width: 640px) {
   .catalog-nav {
-    left: 0;
-    right: 0;
+    /* Keep right corner positioning on mobile */
+    bottom: 1.5rem;
+    right: 1.5rem;
+    left: auto;
     transform: none;
     max-width: none;
-    width: 100%;
+    width: auto;
+  }
+  
+  .catalog-nav.with-chat-button {
+    bottom: 5.5rem;
   }
   
   .catalog-nav-content {
-    width: 100%;
+    width: auto;
     max-width: none;
     box-sizing: border-box;
   }
   
-  .aero-search-bar {
-    width: 88vw;
-    max-width: 100%;
-    margin: 0 0.5rem;
-    padding-left: 0;
-    padding-right: 0;
+  .aero-search-bar.expanded {
+    width: 320px;
+    max-width: calc(100vw - 3rem);
   }
 } 

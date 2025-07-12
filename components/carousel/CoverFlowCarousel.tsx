@@ -71,23 +71,21 @@ export function CoverFlowCarousel({
     
     setIsDragging(false);
     
-    const threshold = 60;
-    const velocity = Math.abs(dragOffset) / 10; // Simple velocity calculation
-    const adjustedThreshold = Math.max(30, threshold - velocity);
+    const threshold = 80;
     
-    if (Math.abs(dragOffset) > adjustedThreshold) {
-      if (dragOffset < 0 && currentIndex < items.length - 1) {
+    if (Math.abs(dragOffset) > threshold) {
+      if (dragOffset < -threshold && currentIndex < items.length - 1) {
         const newIndex = currentIndex + 1;
         setCurrentIndex(newIndex);
         onItemSelect?.(items[newIndex], newIndex);
-      } else if (dragOffset > 0 && currentIndex > 0) {
+      } else if (dragOffset > threshold && currentIndex > 0) {
         const newIndex = currentIndex - 1;
         setCurrentIndex(newIndex);
         onItemSelect?.(items[newIndex], newIndex);
       }
     }
     
-    // Smooth reset of drag offset
+    // Reset drag offset
     setDragOffset(0);
   }, [isDragging, dragOffset, currentIndex, items, onItemSelect]);
 
@@ -129,7 +127,7 @@ export function CoverFlowCarousel({
 
   const getItemStyle = (index: number) => {
     const distance = index - currentIndex;
-    const dragOffsetFactor = isDragging ? dragOffset / 150 : 0;
+    const dragOffsetFactor = isDragging ? Math.max(-1.5, Math.min(1.5, dragOffset / 120)) : 0;
     const adjustedDistance = distance - dragOffsetFactor;
     
     const absDistance = Math.abs(adjustedDistance);
@@ -208,7 +206,7 @@ export function CoverFlowCarousel({
     >
       {showTitle && (
         <div className="text-center py-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Featured Albums</h2>
+          <h2 className="text-3xl font-bold text-[#0277BD] opacity-50 mb-2">Featured Albums</h2>
         </div>
       )}
       
