@@ -6,9 +6,9 @@ import { Github, Music, ArrowRight } from 'lucide-react';
 
 export default function LandingContent() {
   return (
-    <div className="relative z-20 min-h-screen flex flex-col justify-center px-6 py-12">
+    <div className="relative z-20 min-h-screen flex flex-col justify-center px-4 py-12 sm:px-20 sm:pr-8">
       {/* External Links - Above Header */}
-      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 sm:left-8 sm:transform-none flex flex-row gap-4 justify-center items-center">
+      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 sm:left-20 sm:transform-none flex flex-row gap-4 justify-center items-center">
         <Link
           href="https://github.com/hannasage/vinyl-db"
           target="_blank"
@@ -43,7 +43,7 @@ export default function LandingContent() {
         <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
           <Link 
             href="/catalog"
-            className="group bg-gradient-to-r from-[#b19cd9] to-[#9b7bb8] text-white font-semibold px-8 py-4 rounded-lg text-lg hover:from-[#9b7bb8] hover:to-[#b19cd9] transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center gap-2"
+            className="group glass-button flex items-center gap-2"
           >
             View Catalog
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
