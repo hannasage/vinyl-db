@@ -88,8 +88,8 @@ async function selectPromptTemplate(query: string, context: string): Promise<'se
   try {
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
-      // Fallback to simple pattern matching if no API key
-      return selectPromptTemplateFallback(query);
+      // Default to search if no API key available
+      return 'search';
     }
 
     const openai = new OpenAI({
@@ -100,7 +100,7 @@ async function selectPromptTemplate(query: string, context: string): Promise<'se
 Classify the user's vinyl collection query into the most appropriate template type.
 
 ## Template Types
-- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection", "what year did X come out", "when did X come out", "oldest album", "newest album", "albums from 2020")
+- **search**: Queries asking about existing albums/artists in collection (e.g., "do I have X", "albums by Y", "show my collection", "oldest album", "newest album", "albums from 2020", "what year did X come out", "what genre is X")
 - **add**: Requests to add new albums to collection (e.g., "add X", "if I don't have X, add it")
 - **remove**: Requests to remove albums from collection (e.g., "remove X", "delete X")
 - **insights**: Requests for analysis/statistics about collection (e.g., "analyze my collection", "what genres do I have", "collection trends")
@@ -108,11 +108,11 @@ Classify the user's vinyl collection query into the most appropriate template ty
 
 ## Examples
 - "do i own any albums by Jane Remover" → search
-- "what year did Kids come out" → search
-- "when did Abbey Road come out" → search
 - "what's my oldest album" → search
 - "what's my newest album" → search
 - "albums from the 70s" → search
+- "what year did Reputation come out" → search
+- "what genre is Dark Side of the Moon" → search
 - "add Abbey Road by The Beatles" → add
 - "remove Sgt Pepper" → remove
 - "what genres do I have" → insights
@@ -123,8 +123,9 @@ Classify the user's vinyl collection query into the most appropriate template ty
 - Artist names containing words like "remove" should NOT trigger remove template
 - Focus on user intent, not just keyword matching
 - When in doubt, prefer "search" over "general"
-- Queries about specific album details (release year, when it came out) are search queries
+- Queries about specific album details (release year, when it came out, genre) are search queries
 - Temporal queries (oldest, newest, albums from year) are search queries
+- Web research queries (what genre, when did X come out, who is X) are handled within search template
 
 ## User Query
 "${query}"
@@ -146,82 +147,14 @@ Return ONLY the template type: search, add, remove, insights, or general`;
       return response as 'search' | 'add' | 'remove' | 'insights' | 'general';
     }
     
-    console.log(`[OPTIMIZATION] AI returned invalid template: "${response}", falling back to pattern matching`);
-    return selectPromptTemplateFallback(query);
+    console.log(`[OPTIMIZATION] AI returned invalid template: "${response}", defaulting to search`);
+    return 'search';
     
   } catch (error) {
     console.error('[OPTIMIZATION] AI template selection failed:', error);
-    console.log('[OPTIMIZATION] Falling back to pattern matching');
-    return selectPromptTemplateFallback(query);
-  }
-}
-
-// Fallback pattern matching for when AI is unavailable
-function selectPromptTemplateFallback(query: string): 'search' | 'add' | 'remove' | 'insights' | 'general' {
-  const queryLower = query.toLowerCase();
-  
-  // Check for explicit action words first (with word boundaries)
-  const addPatterns = /\b(add|new|create|insert)\b/;
-  const removePatterns = /\b(remove|delete|delete|take out|get rid of)\b/;
-  const insightPatterns = /\b(insight|analyze|trend|pattern|statistic|summary)\b/;
-  const searchPatterns = /\b(find|search|have|show|own|got|got any|do i have|do you have|what do i have|what's in my collection)\b/;
-  
-  if (addPatterns.test(queryLower)) return 'add';
-  if (removePatterns.test(queryLower)) return 'remove';
-  if (insightPatterns.test(queryLower)) return 'insights';
-  if (searchPatterns.test(queryLower)) return 'search';
-  
-  // Check for album-specific queries (asking about specific albums or their details)
-  const albumQueryPatterns = [
-    /\bwhat year\b/, // "what year did X come out"
-    /\bwhen\b/, // "when did X come out"
-    /\brelease\b/, // "release date", "release year"
-    /\bcome out\b/, // "when did X come out"
-    /\bcame out\b/, // "when did X come out"
-    /\bout\b/, // "what year did X come out"
-  ];
-  
-  if (albumQueryPatterns.some(pattern => pattern.test(queryLower))) {
+    console.log('[OPTIMIZATION] Defaulting to search template');
     return 'search';
   }
-  
-  // Check for temporal queries (oldest, newest, albums from year)
-  const temporalQueryPatterns = [
-    /\boldest\b/, // "oldest album"
-    /\bnewest\b/, // "newest album"
-    /\bearliest\b/, // "earliest album"
-    /\blatest\b/, // "latest album"
-    /\bfirst\b/, // "first album"
-    /\blast\b/, // "last album"
-    /\brecent\b/, // "recent albums"
-    /\bvintage\b/, // "vintage albums"
-    /\bclassic\b/, // "classic albums"
-  ];
-  
-  if (temporalQueryPatterns.some(pattern => pattern.test(queryLower))) {
-    return 'search';
-  }
-  
-  // Fallback: check for common search patterns without explicit action words
-  const searchIndicators = [
-    'by', // "albums by artist"
-    'from', // "albums from year"
-    'in', // "albums in collection"
-    'of', // "albums of artist"
-    'with', // "albums with title"
-    'like', // "albums like"
-    'similar to', // "albums similar to"
-    'genre', // "rock albums"
-    'year', // "albums from 2020"
-    'decade', // "albums from the 80s"
-    'era' // "albums from the 70s"
-  ];
-  
-  if (searchIndicators.some(indicator => queryLower.includes(indicator))) {
-    return 'search';
-  }
-  
-  return 'general';
 }
 
 // Optimized prompt templates
@@ -231,7 +164,7 @@ const PROMPT_TEMPLATES = {
 Vinyl collection planning assistant.
 
 ## Task
-Create operation plans using available tools.
+Create operation plans using available tools, prioritizing collection data over web search.
 
 ## Output
 Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "description": "desc", "requiresConfirmation": bool}]}
@@ -241,6 +174,7 @@ Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "desc
 - Add/remove operations require confirmation
 - Support conditional logic ("if I don't have X, add it")
 - Distinguish artist vs album queries
+- ALWAYS try collection first, use web search only as fallback
 
 ## Available Tools
 {TOOLS}
@@ -285,16 +219,17 @@ User: "If I don't have Revolver, add it"
 Vinyl collection search assistant.
 
 ## Task
-Plan search operations using semantic similarity.
+Plan search operations using semantic similarity, prioritizing collection data over web search.
 
 ## Output
-Return ONLY valid JSON: {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "search", "searchType": "type"}, "description": "desc", "requiresConfirmation": false}]}
+Return ONLY valid JSON: {"operations": [{"tool": "name", "parameters": {}, "description": "desc", "requiresConfirmation": false}]}
 
-## Search Types
-- Artist: "albums by [artist]" → searchType: "artist"
-- Album: "do I have [album]", "what year did [album] come out" → searchType: "album"  
-- Combined: "[album] by [artist]" → searchType: "combined"
-- Temporal: "oldest", "newest", "2013" → searchType: "temporal"
+## Search Strategy
+- ALWAYS try collection first: "what year did [album] come out" → vinyl_collection_query
+- Only use web search if collection search fails or returns no results
+- Collection queries: "albums by [artist]", "do I have [album]" → vinyl_collection_query
+- Combined: "[album] by [artist]" → vinyl_collection_query with searchType: "combined"
+- Temporal: "oldest", "newest", "2013" → vinyl_collection_query with searchType: "temporal"
 
 ## Examples
 User: "What do I have by The Beatles?"
@@ -306,14 +241,14 @@ User: "Find albums from the 70s"
 User: "What's my oldest album?"
 {"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "oldest album", "searchType": "temporal"}, "description": "Find the oldest album in the collection", "requiresConfirmation": false}]}
 
-User: "What's my newest album?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "newest album", "searchType": "temporal"}, "description": "Find the newest album in the collection", "requiresConfirmation": false}]}
-
 User: "What year did Kids come out?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search for Kids album to find release year", "requiresConfirmation": false}]}
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Kids", "searchType": "album"}, "description": "Search collection for Kids album release year", "requiresConfirmation": false}]}
 
 User: "When did Abbey Road come out?"
-{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search for Abbey Road album to find release year", "requiresConfirmation": false}]}
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Abbey Road", "searchType": "album"}, "description": "Search collection for Abbey Road release year", "requiresConfirmation": false}]}
+
+User: "What genre is Reputation?"
+{"operations": [{"tool": "vinyl_collection_query", "parameters": {"query": "Reputation", "searchType": "album"}, "description": "Search collection for Reputation album", "requiresConfirmation": false}]}
 
 {CONTEXT}
 
@@ -419,6 +354,7 @@ Convert results to natural responses.
 - Match results accurately
 - For release year queries, provide the specific year: "Kids by The Midnight came out in 2018"
 - For album detail queries, focus on the specific information requested
+- For web search results, provide the answer naturally and mention sources if available
 
 ## Response Patterns
 - Found albums: "I found [X] albums: <ul><li>Album by Artist</li></ul>"
@@ -429,6 +365,8 @@ Convert results to natural responses.
 - Remove success: "Successfully removed [album] by [artist]"
 - Conditional: "I checked and you [already have/didn't have] [album] by [artist]"
 - Insights: "Here are insights: <ul><li>Insight 1</li><li>Insight 2</li></ul>"
+- Web search: "[Answer from web search]. Sources: <ul><li>Source 1</li><li>Source 2</li></ul>"
+- Web search error: "I couldn't find information about [query] online."
 
 ## Input
 User: "{QUERY}"
@@ -439,7 +377,7 @@ Results: {RESULTS}
 ## Response
 Provide a friendly, clear response that matches the results.`;
 
-// Tool definitions - Enhanced RAG Tools v1.3
+// Tool definitions - Enhanced RAG Tools v1.5
 const TOOLS = {
   // Core collection management with semantic search
   vinyl_collection_query: {
@@ -497,6 +435,23 @@ const TOOLS = {
         insightType: { type: 'string', description: 'Type of insight: genres, eras, themes, recommendations, temporal (default: genres)' },
         limit: { type: 'number', description: 'Number of insights to generate (default: 5)' }
       }
+    }
+  },
+  
+  // Web search for questions that can't be answered from collection metadata
+  vinyl_web_search: {
+    name: 'vinyl_web_search',
+    description: 'Search the web for information about albums, artists, genres, release dates, and music history',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Web search query (required)' },
+        searchType: { type: 'string', description: 'Type of search: genre, release_info, artist_info, context, reception (default: auto-detected)' },
+        albumName: { type: 'string', description: 'Album name for context (optional)' },
+        artistName: { type: 'string', description: 'Artist name for context (optional)' },
+        year: { type: 'number', description: 'Release year for context (optional)' }
+      },
+      required: ['query']
     }
   }
 };
@@ -561,10 +516,11 @@ ${previousResults.map((result, index) =>
 ## Reflection
 Analyze previous results and decide next steps:
 - If the last operation was a vinyl_collection_query that returned found: true, the search was successful and the request is satisfied. Return {"operations": []}.
-- If the last operation was a vinyl_collection_query that returned found: false, consider alternative search strategies.
+- If the last operation was a vinyl_collection_query that returned found: false, consider web search as fallback for questions about album details, genres, release dates, etc.
 - "if I don't have X, add it": If found: false → plan add; if found: true → return empty
 - "do I have X": If found: true → return empty (query answered); if found: false → return empty (confirmed not found)
 - Direct "add X": Return empty (handled in first iteration)
+- Web search fallback: If collection search found: false and query asks about album details (year, genre, etc.), try vinyl_web_search
 
 IMPORTANT: If the last result shows found: true with albums, the search is complete. Return {"operations": []}.
 
@@ -1419,6 +1375,71 @@ async function executeVinylCollectionInsights(params: any, supabase: any, authHe
   }
 }
 
+async function executeVinylWebSearch(params: any, supabase: any, authHeader: string): Promise<any> {
+  console.log('[chat-response] Executing vinyl_web_search with params:', params);
+  
+  const { query, searchType, albumName, artistName, year } = params;
+  
+  if (!query) {
+    throw new Error('Query parameter is required');
+  }
+
+  try {
+    // Call the web-search function
+    const webSearchUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/web-search`;
+    const response = await fetch(webSearchUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        query,
+        searchType,
+        albumName,
+        artistName,
+        year
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Web search error:', errorText);
+      throw new Error(`Web search failed: ${response.status}`);
+    }
+
+    const searchResult = await response.json();
+    
+    if (!searchResult.success) {
+      throw new Error(searchResult.error || searchResult.message || 'Web search failed');
+    }
+
+    return {
+      success: true,
+      message: searchResult.answer,
+      query: searchResult.query,
+      answer: searchResult.answer,
+      sources: searchResult.sources || [],
+      confidence: searchResult.confidence || 0.7,
+      searchType: searchResult.searchType,
+      webSearch: true
+    };
+
+  } catch (error) {
+    console.error('Error in executeVinylWebSearch:', error);
+    
+    // Fallback response for web search failures
+    return {
+      success: false,
+      message: `I couldn't find information about "${query}" online. This might be because the information isn't widely available or there was a temporary issue with the search service.`,
+      query,
+      searchType,
+      error: error.message,
+      webSearch: true
+    };
+  }
+}
+
 
 
 
@@ -1564,6 +1585,9 @@ async function executeOperation(operation: Operation, supabase: any, authHeader:
         break;
       case 'vinyl_collection_insights':
         result = await executeVinylCollectionInsights(operation.parameters, supabase, authHeader);
+        break;
+      case 'vinyl_web_search':
+        result = await executeVinylWebSearch(operation.parameters, supabase, authHeader);
         break;
       default:
         throw new Error(`Unknown tool: ${operation.tool}`);
