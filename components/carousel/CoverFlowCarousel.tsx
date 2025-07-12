@@ -272,7 +272,7 @@ function CarouselItemComponent({ item, isActive, style, onClick }: CarouselItemP
               width={288}
               height={288}
               className={classNames(
-                'w-72 h-72 object-cover rounded-lg shadow-2xl',
+                'w-56 h-56 md:w-72 md:h-72 object-cover rounded-lg shadow-2xl',
                 'transition-shadow duration-300',
                 isActive ? 'shadow-white/20' : 'shadow-black/60',
                 'group-hover:shadow-white/10'
@@ -290,7 +290,7 @@ function CarouselItemComponent({ item, isActive, style, onClick }: CarouselItemP
           </div>
           
           {/* Back - Album Details */}
-          <div className="absolute top-0 left-0 w-72 h-72 flex flex-col items-center justify-center bg-[#fafafa] [backface-visibility:hidden] [transform:rotateY(180deg)] p-6 rounded-lg shadow-2xl">
+          <div className="absolute top-0 left-0 w-56 h-56 md:w-72 md:h-72 flex flex-col items-center justify-center bg-[#fafafa] [backface-visibility:hidden] [transform:rotateY(180deg)] p-4 md:p-6 rounded-lg shadow-2xl">
             <h3 className="text-xl font-bold text-gray-900 text-center mb-2 leading-tight">
               {item.title}
             </h3>
