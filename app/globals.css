@@ -51,25 +51,23 @@
   }
 
   h2 {
-    @apply text-5xl
+    @apply text-5xl;
   }
 
   h3 {
-    @apply text-4xl
+    @apply text-4xl;
   }
 
   h4 {
-    @apply text-3xl
+    @apply text-3xl;
   }
 
   h5 {
-    @apply text-2xl
+    @apply text-2xl;
   }
 
-  a {
-    :hover {
-      @apply cursor-pointer
-    }
+  a:hover {
+    @apply cursor-pointer;
   }
 
   .page-container {
@@ -80,11 +78,11 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-red-500 to-purple-600
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-[#b19cd9] to-[#9b7bb8];
   }
 
   .section-heading {
-    @apply font-black tracking-tighter gradient-text
+    @apply font-black tracking-tighter gradient-text;
   }
 
   .page-hero-container {
@@ -133,4 +131,53 @@
 .no-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
+}
+
+/* Landing page animations */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 60s linear infinite;
+}
+
+/* Responsive adjustments for landing page */
+@media (max-width: 768px) {
+  .animate-scroll {
+    animation-duration: 40s;
+  }
+}
+
+@media (max-width: 480px) {
+  .animate-scroll {
+    animation-duration: 30s;
+  }
+}
+
+/* Landing page grid adjustments for smaller screens */
+@media (max-width: 1024px) {
+  .animate-scroll .grid {
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .animate-scroll .grid {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(12, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .animate-scroll .grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(16, 1fr);
+  }
 }
