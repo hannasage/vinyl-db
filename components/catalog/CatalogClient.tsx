@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FullAlbumDetails } from '@/data/types';
+import { CoverFlowCarousel, CarouselItem } from '@/components/carousel/CoverFlowCarousel';
 import CatalogNavigation from './CatalogNavigation';
 import CatalogGrid from './CatalogGrid';
 
@@ -20,8 +21,31 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
     );
   }, [initialAlbums, searchQuery]);
 
+  const randomAlbums = useMemo(() => {
+    if (initialAlbums.length <= 10) return initialAlbums;
+    
+    const shuffled = [...initialAlbums].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 10);
+  }, [initialAlbums]);
+
+  const carouselItems: CarouselItem[] = useMemo(() => {
+    return randomAlbums.map(album => ({
+      id: album.id.toString(),
+      src: album.artwork_url || '/default-album-cover.png',
+      alt: `${album.title} by ${album.artist_name}`,
+      title: album.title,
+      artist: album.artist_name,
+      year: album.release_year
+    }));
+  }, [randomAlbums]);
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+  };
+
+  const handleAlbumSelect = (item: CarouselItem, index: number) => {
+    const album = randomAlbums[index];
+    console.log('Selected album:', album);
   };
 
   return (
@@ -29,6 +53,19 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
       <CatalogNavigation
         onSearch={handleSearch}
       />
+      
+      {carouselItems.length > 0 && (
+        <div>
+          <CoverFlowCarousel
+            items={carouselItems}
+            initialIndex={Math.floor(carouselItems.length / 2)}
+            onItemSelect={handleAlbumSelect}
+            className="h-[480px]"
+            showTitle={true}
+          />
+        </div>
+      )}
+      
       <CatalogGrid
         albums={filteredAlbums}
         isLoading={false}
