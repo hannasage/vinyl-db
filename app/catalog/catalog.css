@@ -97,7 +97,7 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, rgba(20,20,20,0.82) 0%, rgba(40,40,40,0.72) 100%);
-  box-shadow: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.356);
   border-radius: 1rem;
   border: 1.5px solid rgba(255,255,255,0.18);
   backdrop-filter: blur(16px) saturate(180%);
