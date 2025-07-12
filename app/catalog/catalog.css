@@ -98,11 +98,27 @@
   justify-content: center;
   background: linear-gradient(135deg, rgba(20,20,20,0.82) 0%, rgba(40,40,40,0.72) 100%);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.356);
-  border-radius: 1rem;
+  border-radius: 0.5rem;
   border: 1.5px solid rgba(255,255,255,0.18);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   pointer-events: auto;
+}
+
+.aero-search-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  margin: -2px;
+  background: linear-gradient(45deg, #b19cd9, #9b7bb8, #8a6bb8, #b19cd9);
+  background-size: 400% 400%;
+  border-radius: 0.5rem;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  animation: gradientShift 3s ease infinite;
 }
 
 .aero-search-input {
