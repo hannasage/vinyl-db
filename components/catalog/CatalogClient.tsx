@@ -5,6 +5,7 @@ import { FullAlbumDetails } from '@/data/types';
 import { CoverFlowCarousel, CarouselItem } from '@/components/carousel/CoverFlowCarousel';
 import CatalogNavigation from './CatalogNavigation';
 import CatalogGrid from './CatalogGrid';
+import { stableRandomSelect } from '@/utils/stableRandom';
 
 interface CatalogClientProps {
   initialAlbums: FullAlbumDetails[];
@@ -24,8 +25,9 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
   const randomAlbums = useMemo(() => {
     if (initialAlbums.length <= 10) return initialAlbums;
     
-    const shuffled = [...initialAlbums].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 10);
+    // Use stable random selection
+    const seed = `${initialAlbums.length}-${initialAlbums[0]?.title || 'default'}`;
+    return stableRandomSelect(initialAlbums, 10, seed);
   }, [initialAlbums]);
 
   const carouselItems: CarouselItem[] = useMemo(() => {
