@@ -2,10 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { FullAlbumDetails } from '@/data/types';
-import { CoverFlowCarousel, CarouselItem } from '@/components/carousel/CoverFlowCarousel';
 import CatalogNavigation from './CatalogNavigation';
 import CatalogGrid from './CatalogGrid';
-import { stableRandomSelect } from '@/utils/stableRandom';
 
 interface CatalogClientProps {
   initialAlbums: FullAlbumDetails[];
@@ -22,33 +20,33 @@ export default function CatalogClient({ initialAlbums }: CatalogClientProps) {
     );
   }, [initialAlbums, searchQuery]);
 
-  const randomAlbums = useMemo(() => {
-    if (initialAlbums.length <= 10) return initialAlbums;
+  // const randomAlbums = useMemo(() => {
+  //   if (initialAlbums.length <= 10) return initialAlbums;
     
     // Use stable random selection
-    const seed = `${initialAlbums.length}-${initialAlbums[0]?.title || 'default'}`;
-    return stableRandomSelect(initialAlbums, 10, seed);
-  }, [initialAlbums]);
+  //   const seed = `${initialAlbums.length}-${initialAlbums[0]?.title || 'default'}`;
+  //   return stableRandomSelect(initialAlbums, 10, seed);
+  // }, [initialAlbums]);
 
-  const carouselItems: CarouselItem[] = useMemo(() => {
-    return randomAlbums.map(album => ({
-      id: album.id.toString(),
-      src: album.artwork_url || '/default-album-cover.png',
-      alt: `${album.title} by ${album.artist_name}`,
-      title: album.title,
-      artist: album.artist_name,
-      year: album.release_year
-    }));
-  }, [randomAlbums]);
+  // const carouselItems: CarouselItem[] = useMemo(() => {
+  //   return randomAlbums.map(album => ({
+  //     id: album.id.toString(),
+  //     src: album.artwork_url || '/default-album-cover.png',
+  //     alt: `${album.title} by ${album.artist_name}`,
+  //     title: album.title,
+  //     artist: album.artist_name,
+  //     year: album.release_year
+  //   }));
+  // }, [randomAlbums]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
   };
 
-  const handleAlbumSelect = (item: CarouselItem, index: number) => {
-    const album = randomAlbums[index];
-    console.log('Selected album:', album);
-  };
+  // const handleAlbumSelect = (item: CarouselItem, index: number) => {
+  //   const album = randomAlbums[index];
+  //   console.log('Selected album:', album);
+  // };
 
   return (
     <>
