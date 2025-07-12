@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { Github, Music, ArrowRight } from 'lucide-react';
 
@@ -35,7 +36,7 @@ export default function LandingContent() {
       {/* Hero Section */}
       <div className="text-center sm:text-left max-w-2xl mb-16 mt-16 relative z-10">
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 tracking-tight">
-          some chick's
+          some chick&apos;s
           <span className="block text-[#b19cd9]">vinyl collection</span>
         </h1>
         
@@ -57,7 +58,7 @@ export default function LandingContent() {
         </h2>
         <p className="text-lg text-white/80 leading-relaxed mb-8">
           This is my personal vinyl collection, managed by AI to keep track of albums, artists, and release dates. 
-          Browse through the catalog to explore what's on the shelves and discover new music.
+          Browse through the catalog to explore what&apos;s on the shelves and discover new music.
         </p>
       </div>
 

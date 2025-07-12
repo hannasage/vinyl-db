@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { FullAlbumDetails } from '@/data/types';
 import Image from 'next/image';
 
