@@ -43,8 +43,8 @@
   background: linear-gradient(135deg, var(--vinyl-black) 0%, var(--charcoal) 100%);
   color: var(--warm-white);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  padding-top: 0 !important;
-  margin-top: 0 !important;
+  padding-top: 0;
+  margin-top: 0;
 }
 
 /* Navigation Bar */
@@ -86,7 +86,7 @@
 }
 
 .aero-center {
-  justify-content: center !important;
+  justify-content: center;
 }
 
 .aero-search-bar {
@@ -97,7 +97,7 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, rgba(20,20,20,0.82) 0%, rgba(40,40,40,0.72) 100%);
-  box-shadow: 0 12px 64px 0 rgba(20, 20, 40, 0.45), 0 2px 24px 0 rgba(0,0,0,0.28);
+  box-shadow: none;
   border-radius: 1rem;
   border: 1.5px solid rgba(255,255,255,0.18);
   backdrop-filter: blur(16px) saturate(180%);
@@ -107,7 +107,7 @@
 
 .aero-search-input {
   width: 100%;
-  padding: 0.5rem 1.5rem 0.5rem 2.5rem;
+  padding: 0.75rem 2rem 0.75rem 2.5rem;
   font-size: 1rem;
   border-radius: 0.75rem;
   border: none;
@@ -144,7 +144,9 @@
 }
 
 /* Remove old search bar styles if present */
-.catalog-search { display: none !important; }
+.catalog-search { 
+  display: none; 
+}
 
 .catalog-nav-actions {
   display: flex;
@@ -155,56 +157,17 @@
 /* Album Grid */
 .album-grid {
   display: grid;
-  gap: 0 !important;
+  gap: 0;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  padding: 0 !important;
+  padding: 0;
+  padding-top: 6.5rem; /* Space for nav bar */
   max-width: none;
-  margin: 0 !important;
+  margin: 0;
 }
 
 .album-grid.list-view {
   grid-template-columns: 1fr;
   gap: var(--spacing-2);
-}
-
-@media (min-width: 768px) {
-  .album-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: none;
-  }
-}
-
-@media (min-width: 1024px) {
-  .album-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: none;
-  }
-}
-
-@media (min-width: 1280px) {
-  .album-grid {
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: none;
-  }
-}
-
-@media (max-width: 767px) {
-  .album-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: none;
-  }
 }
 
 /* Album Card */
@@ -340,6 +303,30 @@
 }
 
 /* Responsive Design */
+@media (min-width: 768px) {
+  .album-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .album-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .album-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .album-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .catalog-nav-content {
     flex-direction: column;
@@ -348,11 +335,6 @@
   
   .catalog-search {
     max-width: 100%;
-  }
-  
-  .album-grid {
-    padding: var(--spacing-6) var(--spacing-4);
-    gap: var(--spacing-4);
   }
   
   .filter-content {
@@ -368,13 +350,15 @@
     max-width: none;
     width: 100%;
   }
+  
   .catalog-nav-content {
     width: 100%;
     max-width: none;
     box-sizing: border-box;
   }
+  
   .aero-search-bar {
-    width: auto;
+    width: 88vw;
     max-width: 100%;
     margin: 0 0.5rem;
     padding-left: 0;
