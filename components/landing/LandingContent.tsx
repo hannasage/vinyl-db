@@ -10,7 +10,7 @@ export default function LandingContent() {
       {/* External Links - Above Header */}
       <div className="absolute top-8 left-1/2 transform -translate-x-1/2 sm:left-8 sm:transform-none flex flex-row gap-4 justify-center items-center">
         <Link
-          href="https://github.com/yourusername/vinyl-db"
+          href="https://github.com/hannasage/vinyl-db"
           target="_blank"
           rel="noopener noreferrer"
           className="group flex items-center gap-3 bg-white/10 backdrop-blur-sm text-white px-6 py-3 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/20"
